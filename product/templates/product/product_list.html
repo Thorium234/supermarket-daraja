@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block content %}
+<h2 class="mb-4">🛒 Available Products</h2>
+
+<table class="table table-bordered table-striped align-middle">
+    <thead class="table-primary">
+        <tr>
+            <th>Name</th>
+            <th>Price (KES)</th>
+            <th>Stock</th>
+            <th>Action</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for product in products %}
+        <tr>
+            <td>{{ product.name }}</td>
+            <td>{{ product.price }}</td>
+            <td>
+                {% if product.stock > 0 %}
+                    {{ product.stock }}
+                {% else %}
+                    <span class="badge bg-danger">Out of Stock</span>
+                {% endif %}
+            </td>
+            <td>
+                {% if product.stock > 0 %}
+                    <a href="{% url 'product:add_to_cart' product.id %}" 
+                       class="btn btn-sm btn-success">
+                       ➕ Add to Cart
+                    </a>
+                {% else %}
+                    <button class="btn btn-sm btn-secondary" disabled>Sold Out</button>
+                {% endif %}
+            </td>
+        </tr>
+    {% empty %}
+        <tr>
+            <td colspan="4" class="text-center text-muted">No products available</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

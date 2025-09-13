@@ -1,0 +1,162 @@
+from decimal import Decimal
+from django.contrib import messages
+from django.shortcuts import render, redirect, get_object_or_404
+
+from .models import Product, Order, OrderItem, Customer
+from payment.models import Payment
+
+
+# -----------------------
+# CART VIEWS
+# -----------------------
+def cart_view(request):
+    """Show cart contents."""
+    cart = request.session.get("cart", {})
+    items = []
+    total = Decimal("0.00")
+
+    for product_id, item_data in cart.items():
+        product = get_object_or_404(Product, id=product_id)
+        quantity = item_data.get("quantity", 1)
+        subtotal = product.price * quantity
+        items.append({
+            "product": product,
+            "quantity": quantity,
+            "subtotal": subtotal
+        })
+        total += subtotal
+
+    return render(request, "product/cart.html", {"items": items, "total": total})
+
+
+def add_to_cart(request, pk):
+    """Add product to cart session."""
+    product = get_object_or_404(Product, pk=pk)
+    cart = request.session.get("cart", {})
+
+    if str(pk) in cart:
+        cart[str(pk)]["quantity"] += 1
+    else:
+        cart[str(pk)] = {
+            "name": product.name,
+            "price": float(product.price),
+            "quantity": 1,
+        }
+
+    request.session["cart"] = cart
+    request.session.modified = True
+
+    messages.success(request, f"{product.name} added to cart.")
+    return redirect("product:product_list")
+
+
+def remove_from_cart(request, pk):
+    """Remove one product from cart."""
+    cart = request.session.get("cart", {})
+    product_id = str(pk)
+
+    if product_id in cart:
+        del cart[product_id]
+        request.session["cart"] = cart
+        request.session.modified = True
+
+    return redirect("product:cart")
+
+
+def update_cart(request, pk):
+    """Update quantity of a product in the cart."""
+    if request.method == "POST":
+        try:
+            new_qty = int(request.POST.get("quantity", 1))
+        except ValueError:
+            new_qty = 1
+
+        cart = request.session.get("cart", {})
+        product_id = str(pk)
+
+        if new_qty > 0 and product_id in cart:
+            cart[product_id]["quantity"] = new_qty
+        else:
+            cart.pop(product_id, None)
+
+        request.session["cart"] = cart
+        request.session.modified = True
+
+    return redirect("product:cart")
+
+
+def clear_cart(request):
+    """Clear entire cart."""
+    request.session["cart"] = {}
+    request.session.modified = True
+    return redirect("product:cart")
+
+
+# -----------------------
+# CHECKOUT
+# -----------------------
+def checkout(request):
+    """Guest checkout (no login required)."""
+    cart = request.session.get("cart", {})
+    if not cart:
+        messages.error(request, "Your cart is empty.")
+        return redirect("product:product_list")
+
+    # Build items list for template
+    items, total = [], Decimal("0.00")
+    for product_id, item_data in cart.items():
+        product = get_object_or_404(Product, id=product_id)
+        qty = item_data.get("quantity", 1)
+        subtotal = product.price * qty
+        items.append({
+            "product": product,
+            "quantity": qty,
+            "subtotal": subtotal
+        })
+        total += subtotal
+
+    if request.method == "POST":
+        phone_number = request.POST.get("phone_number")
+        customer, _ = Customer.objects.get_or_create(phone_number=phone_number)
+
+        # Create order
+        order = Order.objects.create(customer=customer, status="PENDING", total_price=0)
+
+        total_price = Decimal("0.00")
+        for item in items:
+            OrderItem.objects.create(
+                order=order,
+                product=item["product"],
+                quantity=item["quantity"],
+                price=item["product"].price,
+            )
+            total_price += item["subtotal"]
+
+        order.total_price = total_price
+        order.save()
+
+        # Create pending payment
+        Payment.objects.create(order=order, amount=total_price, status="PENDING")
+
+        # Clear cart
+        request.session["cart"] = {}
+        request.session.modified = True
+
+        action = request.POST.get("action")
+        if action == "pay_now":
+            # 🚀 Redirect straight to M-Pesa payment initiation
+            return redirect("initiate_payment", order_id=order.id)
+
+        messages.success(request, f"Order #{order.id} created. Awaiting payment.")
+        return redirect("receipt", order_id=order.id)
+
+    return render(request, "product/checkout.html", {"items": items, "total": total})
+
+
+# -----------------------
+# ORDER RECEIPT
+# -----------------------
+def receipt_view(request, order_id):
+    """Display receipt for an order."""
+    order = get_object_or_404(Order, id=order_id)
+    return render(request, "product/receipt.html", {"order": order})

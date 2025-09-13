@@ -1,0 +1,1609 @@
+# from django.http import HttpResponse, JsonResponse
+# from django.views.decorators.csrf import csrf_exempt
+# from django_daraja.mpesa.core import MpesaClient
+# import json
+
+
+# def index(request):
+#     """
+#     Initiates an STK Push request
+#     """
+#     cl = MpesaClient()
+#     phone_number = '0723958346'  # Safaricom number you have access to
+#     amount = 1  # keep low when testing
+#     account_reference = '0723958346'
+#     transaction_desc = 'CBE E-LIBRARY PORTAL Payment'
+    
+#     # Replace with your ngrok URL when testing
+#     callback_url = 'https://6d74e7172178.ngrok-free.app/stk_push_callback/'
+
+#     try:
+#         response = cl.stk_push(
+#             phone_number, 
+#             amount, 
+#             account_reference,  
+#             transaction_desc, 
+#             callback_url
+#         )
+#         return JsonResponse(response, safe=False)
+#     except Exception as e:
+#         return HttpResponse(f"Error: {str(e)}", status=500)
+
+
+# @csrf_exempt  # Safaricom will not send CSRF tokens
+# def stk_push_callback(request):
+#     """
+#     Handles Safaricom's callback after STK Push
+#     """
+#     if request.method == "POST":
+#         data = json.loads(request.body.decode("utf-8"))
+#         print("📩 STK Callback Response:", json.dumps(data, indent=4))
+#         return JsonResponse({"ResultCode": 0, "ResultDesc": "Callback received successfully"})
+#     return HttpResponse("Only POST requests are accepted here.")
+
+
+ 
+# def get_token(request):
+#     from django.conf import settings
+#     print("DEBUG:", settings.MPESA_CONSUMER_KEY, settings.MPESA_CONSUMER_SECRET[:5], "...")
+
+#     cl = MpesaClient()
+#     token = cl.access_token()
+#     return JsonResponse({"access_token": token})
+
+
+# from django.urls import path
+# from . import views
+
+# urlpatterns = [
+#     path('', views.index, name='index'),
+#     path('stk_push_callback/', views.stk_push_callback, name='stk_push_callback'),
+#     path('get_token/', views.get_token, name='get_token'),  # optional for debugging
+# ]
+
+
+
+
+# product/views.py
+from django.shortcuts import render, redirect, get_object_or_404
+from django.contrib.auth.decorators import login_required, user_passes_test
+from django.contrib import messages
+from django.http import HttpResponse, FileResponse
+from django.utils.timezone import now, timedelta
+from django.db.models import Sum
+from .models import Product, Order, OrderItem, Customer,VerificationLog
+
+import io, json
+import pandas as pd
+import matplotlib.pyplot as plt
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfgen import canvas
+from reportlab.lib.utils import ImageReader
+from openpyxl import Workbook
+from openpyxl.chart import LineChart, Reference, BarChart
+
+# ---------- Helpers ----------
+
+def is_cashier_or_owner(user):
+    """Check if user is staff (cashier/owner)."""
+    return user.is_authenticated and (user.is_staff or user.is_superuser)
+
+
+# ---------- Product CRUD (Cashier/Owner Only) ----------
+
+@login_required
+@user_passes_test(is_cashier_or_owner)
+def product_list_admin(request):
+    products = Product.objects.all()
+    return render(request, "product/product_list_admin.html", {"products": products})
+
+
+@login_required
+@user_passes_test(is_cashier_or_owner)
+def product_create(request):
+    if request.method == "POST":
+        Product.objects.create(
+            name=request.POST.get("name"),
+            price=request.POST.get("price"),
+            stock=request.POST.get("stock"),
+            barcode=request.POST.get("barcode"),
+        )
+        messages.success(request, "Product added successfully.")
+        return redirect("product_list_admin")
+
+    return render(request, "product/product_form.html")
+
+
+@login_required
+@user_passes_test(is_cashier_or_owner)
+def product_edit(request, pk):
+    product = get_object_or_404(Product, pk=pk)
+
+    if request.method == "POST":
+        product.name = request.POST.get("name")
+        product.price = request.POST.get("price")
+        product.stock = request.POST.get("stock")
+        product.barcode = request.POST.get("barcode")
+        product.save()
+        messages.success(request, "Product updated successfully.")
+        return redirect("product_list_admin")
+
+    return render(request, "product/product_form.html", {"product": product})
+
+
+@login_required
+@user_passes_test(is_cashier_or_owner)
+def product_delete(request, pk):
+    product = get_object_or_404(Product, pk=pk)
+    product.delete()
+    messages.success(request, "Product deleted successfully.")
+    return redirect("product_list_admin")
+
+
+# ---------- Customer Shopping ----------
+from django.shortcuts import render, redirect, get_object_or_404
+from .models import Product
+
+def product_list(request):
+    """Show all products available for shopping."""
+    products = Product.objects.all()
+    return render(request, "product/product_list.html", {"products": products})
+from django.shortcuts import get_object_or_404, redirect
+from .models import Product
+
+def add_to_cart(request, pk):
+    product = get_object_or_404(Product, pk=pk)
+
+    # Load session cart (dict of {product_id: quantity})
+    cart = request.session.get("cart", {})
+
+    # Convert keys to str since session keys must be JSON serializable
+    product_id = str(product.id)
+
+    # Increase quantity if product already in cart
+    if product_id in cart:
+        cart[product_id] += 1
+    else:
+        cart[product_id] = 1
+
+    # Save back to session
+    request.session["cart"] = cart
+    request.session.modified = True
+
+    return redirect("product:cart")   # go to cart page after adding
+
+from decimal import Decimal
+from django.shortcuts import render
+from .models import Product
+
+
+def cart_view(request):
+    cart = request.session.get("cart", {})
+    items = []
+    total = Decimal("0.00")
+
+    for product_id, quantity in cart.items():   # quantity is already an int
+        product = Product.objects.get(id=product_id)
+        subtotal = product.price * quantity
+        items.append({
+            "product": product,
+            "quantity": quantity,
+            "subtotal": subtotal
+        })
+        total += subtotal
+
+    return render(request, "product/cart.html", {"items": items, "total": total})
+
+
+from decimal import Decimal
+from django.contrib import messages
+from django.shortcuts import render, redirect, get_object_or_404
+from .models import Product, Order, OrderItem, Customer
+from payment.models import Payment, StockDeductionLog
+
+def checkout(request):
+    """Guest checkout (no login required)."""
+    cart = request.session.get("cart", {})
+    if not cart:
+        messages.error(request, "Your cart is empty.")
+        return redirect("product:product_list")
+
+    if request.method == "POST":
+        phone_number = request.POST.get("phone_number")
+        action = request.POST.get("action")  # 👈 distinguish button pressed
+
+        # Create/find customer
+        customer, _ = Customer.objects.get_or_create(phone_number=phone_number)
+
+        # Create order
+        order = Order.objects.create(customer=customer, status="PENDING", total_price=0)
+
+        total_price = Decimal("0.00")
+        for product_id, qty in cart.items():
+            product = Product.objects.get(id=product_id)
+            OrderItem.objects.create(order=order, product=product, quantity=qty, price=product.price)
+            total_price += product.price * qty
+
+        order.total_price = total_price
+        order.save()
+
+        # Payment record (always created PENDING first)
+        Payment.objects.create(order=order, amount=total_price, status="PENDING")
+
+        # Clear cart
+        request.session["cart"] = {}
+        request.session.modified = True
+
+        if action == "pay_now":
+            # 👇 jump straight into payment initiation
+            return redirect("initiate_payment", order_id=order.id)
+        else:
+            messages.success(request, f"Order #{order.id} created. Awaiting payment.")
+            return redirect("receipt", order_id=order.id)
+
+    return render(request, "product/checkout.html")
+
+# ---------- Dashboard + Reports ----------
+
+from datetime import timedelta
+from django.utils.timezone import now
+from django.db.models import Sum
+from django.contrib.auth.decorators import login_required, user_passes_test
+
+@login_required
+@user_passes_test(is_cashier_or_owner)
+def dashboard(request):
+    """Admin dashboard with full supermarket stats + charts (with filters)."""
+    filter_option = request.GET.get("filter", "month")  # default: month
+    today = now().date()
+
+    if filter_option == "today":
+        start_date = today
+    elif filter_option == "week":
+        start_date = today - timedelta(days=7)
+    else:  # month
+        start_date = today - timedelta(days=30)
+    # verification logs
+    verification_count = VerificationLog.objects.count()
+    recent_verifications = VerificationLog.objects.order_by("-verified_at")[:5]
+
+    context.update({
+        "verification_count": verification_count,
+        "recent_verifications": recent_verifications,
+    })
+
+    # Orders within selected range
+    paid_orders = Order.objects.filter(status="PAID", created_at__date__gte=start_date)
+    pending_orders = Order.objects.filter(status="PENDING", created_at__date__gte=start_date)
+    cancelled_orders = Order.objects.filter(status="CANCELLED", created_at__date__gte=start_date)
+
+    total_sales = paid_orders.aggregate(total=Sum("total_price"))["total"] or 0
+    total_orders = (
+        paid_orders.count() + pending_orders.count() + cancelled_orders.count()
+    )
+    total_products = Product.objects.count()
+    total_stock = sum(p.stock for p in Product.objects.all())
+
+    low_stock_products = Product.objects.filter(stock__lte=5)
+    recent_orders = Order.objects.filter(created_at__date__gte=start_date).order_by("-created_at")[:10]
+
+    # ---- Charts ----
+    # Orders by status
+    order_status_data = {
+        "Paid": paid_orders.count(),
+        "Pending": pending_orders.count(),
+        "Cancelled": cancelled_orders.count(),
+    }
+
+    # Sales trends (7 days)
+    sales_trends = []
+    for i in range(7):
+        day = today - timedelta(days=i)
+        sales = Order.objects.filter(
+            status="PAID", created_at__date=day
+        ).aggregate(total=Sum("total_price"))["total"] or 0
+        sales_trends.append({"date": day.strftime("%Y-%m-%d"), "sales": sales})
+    sales_trends.reverse()
+
+    # Top selling products
+    top_products = (
+        OrderItem.objects.filter(order__status="PAID", order__created_at__date__gte=start_date)
+        .values("product__name")
+        .annotate(total_sold=Sum("quantity"))
+        .order_by("-total_sold")[:5]
+    )
+    top_products_data = {item["product__name"]: item["total_sold"] for item in top_products}
+
+    context = {
+        "total_sales": total_sales,
+        "total_orders": total_orders,
+        "total_products": total_products,
+        "total_stock": total_stock,
+        "paid_count": paid_orders.count(),
+        "pending_count": pending_orders.count(),
+        "cancelled_count": cancelled_orders.count(),
+        "low_stock_products": low_stock_products,
+        "recent_orders": recent_orders,
+        "order_status_data": json.dumps(order_status_data),
+        "sales_trends": json.dumps(sales_trends),
+        "top_products_data": json.dumps(top_products_data),
+        "filter_option": filter_option,
+    }
+    return render(request, "product/dashboard.html", context)
+
+
+@login_required
+@user_passes_test(is_cashier_or_owner)
+def export_orders_pdf(request):
+    buffer = io.BytesIO()
+    p = canvas.Canvas(buffer, pagesize=A4)
+    width, height = A4
+
+    # ---- Summary ----
+    paid_count = Order.objects.filter(status="PAID").count()
+    pending_count = Order.objects.filter(status="PENDING").count()
+    cancelled_count = Order.objects.filter(status="CANCELLED").count()
+    total_sales = Order.objects.filter(status="PAID").aggregate(total=Sum("total_price"))["total"] or 0
+
+    p.setFont("Helvetica-Bold", 16)
+    p.drawString(180, height - 40, "Supermarket Report")
+    p.setFont("Helvetica", 12)
+    p.drawString(50, height - 80, f"Paid Orders: {paid_count}")
+    p.drawString(50, height - 100, f"Pending Orders: {pending_count}")
+    p.drawString(50, height - 120, f"Cancelled Orders: {cancelled_count}")
+    p.drawString(50, height - 140, f"Total Revenue: KES {total_sales:,.2f}")
+
+    # ---- Charts ----
+    # Sales Trends
+    today = now().date()
+    sales_trends = [
+        {
+            "date": (today - timedelta(days=i)).strftime("%Y-%m-%d"),
+            "sales": Order.objects.filter(
+                status="PAID", created_at__date=(today - timedelta(days=i))
+            ).aggregate(total=Sum("total_price"))["total"] or 0,
+        }
+        for i in range(6, -1, -1)
+    ]
+    plt.figure(figsize=(5, 3))
+    plt.plot([s["date"] for s in sales_trends], [s["sales"] for s in sales_trends], marker="o")
+    plt.title("Sales Trends (Last 7 Days)")
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+    img_trend = io.BytesIO()
+    plt.savefig(img_trend, format="PNG")
+    img_trend.seek(0)
+    p.drawImage(ImageReader(img_trend), 50, height - 350, width=500, height=150)
+    plt.close()
+
+    # Top Selling Products
+    top_products = (
+        OrderItem.objects.filter(order__status="PAID")
+        .values("product__name")
+        .annotate(total_sold=Sum("quantity"))
+        .order_by("-total_sold")[:5]
+    )
+    plt.figure(figsize=(5, 3))
+    plt.barh([item["product__name"] for item in top_products],
+             [item["total_sold"] for item in top_products])
+    plt.title("Top Selling Products")
+    plt.tight_layout()
+    img_top = io.BytesIO()
+    plt.savefig(img_top, format="PNG")
+    img_top.seek(0)
+    p.drawImage(ImageReader(img_top), 50, height - 550, width=500, height=150)
+    plt.close()
+
+    p.save()
+    buffer.seek(0)
+    return FileResponse(buffer, as_attachment=True, filename="supermarket_report.pdf")
+
+
+@login_required
+@user_passes_test(is_cashier_or_owner)
+def export_orders_excel(request):
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Supermarket Report"
+
+    # ---- Summary ----
+    ws["A1"] = "Supermarket Report"
+    ws.append([])
+    ws.append(["Paid Orders", Order.objects.filter(status="PAID").count()])
+    ws.append(["Pending Orders", Order.objects.filter(status="PENDING").count()])
+    ws.append(["Cancelled Orders", Order.objects.filter(status="CANCELLED").count()])
+    ws.append([
+        "Total Revenue (KES)",
+        Order.objects.filter(status="PAID").aggregate(total=Sum("total_price"))["total"] or 0,
+    ])
+
+    # ---- Sales Trends ----
+    ws.append([])
+    ws.append(["Date", "Sales (KES)"])
+    today = now().date()
+    for i in range(6, -1, -1):
+        day = today - timedelta(days=i)
+        sales = Order.objects.filter(status="PAID", created_at__date=day).aggregate(total=Sum("total_price"))["total"] or 0
+        ws.append([day.strftime("%Y-%m-%d"), sales])
+
+    chart = LineChart()
+    data = Reference(ws, min_col=2, min_row=8, max_row=14)
+    cats = Reference(ws, min_col=1, min_row=9, max_row=14)
+    chart.add_data(data, titles_from_data=True)
+    chart.set_categories(cats)
+    chart.title = "Sales Trends"
+    ws.add_chart(chart, "D8")
+
+    # ---- Top Products ----
+    ws.append([])
+    ws.append(["Product", "Units Sold"])
+    top_products = (
+        OrderItem.objects.filter(order__status="PAID")
+        .values("product__name")
+        .annotate(total_sold=Sum("quantity"))
+        .order_by("-total_sold")[:5]
+    )
+    for item in top_products:
+        ws.append([item["product__name"], item["total_sold"]])
+
+    bar = BarChart()
+    data = Reference(ws, min_col=2, min_row=17, max_row=16 + len(top_products))
+    cats = Reference(ws, min_col=1, min_row=17, max_row=16 + len(top_products))
+    bar.add_data(data, titles_from_data=True)
+    bar.set_categories(cats)
+    bar.title = "Top Selling Products"
+    ws.add_chart(bar, "D17")
+
+    # ---- Recent Orders ----
+    ws.append([])
+    ws.append(["Order ID", "Customer", "Status", "Total (KES)", "Date"])
+    for order in Order.objects.all().order_by("-created_at")[:10]:
+        ws.append([
+            order.id,
+            order.customer.name if order.customer else "N/A",
+            order.status,
+            order.total_price,
+            order.created_at.strftime("%Y-%m-%d"),
+        ])
+
+    response = HttpResponse(content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    response["Content-Disposition"] = 'attachment; filename="supermarket_report.xlsx"'
+    wb.save(response)
+    return response
+
+
+
+from django.shortcuts import get_object_or_404, render
+from django.http import HttpResponse
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfgen import canvas
+from .models import Order
+
+def receipt(request, order_id):
+    order = get_object_or_404(Order.objects.select_related("customer").prefetch_related("items__product"), id=order_id)
+    return render(request, "product/receipt.html", {"order": order})
+
+
+from django.http import JsonResponse
+
+def check_payment_status(request, order_id):
+    order = get_object_or_404(Order, id=order_id)
+    payment = Payment.objects.filter(order=order).first()
+    return JsonResponse({
+        "status": payment.status if payment else "NOT INITIATED"
+    })
+import qrcode
+from io import BytesIO
+from django.conf import settings
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfgen import canvas
+from reportlab.lib.utils import ImageReader
+from django.http import HttpResponse
+from django.shortcuts import get_object_or_404, render
+from .models import Order
+import os
+
+
+def receipt_pdf(request, order_id):
+    """Generate a PDF receipt with logo + QR code."""
+    order = get_object_or_404(Order, id=order_id)
+
+    # HTTP Response
+    response = HttpResponse(content_type="application/pdf")
+    response["Content-Disposition"] = f'inline; filename="receipt_{order.id}.pdf"'
+
+    # Canvas setup
+    p = canvas.Canvas(response, pagesize=A4)
+    width, height = A4
+
+    # ✅ Add Supermarket Logo
+    logo_path = os.path.join(settings.BASE_DIR, "static/img/supermarket_logo.png")
+    if os.path.exists(logo_path):
+        p.drawImage(logo_path, 50, height - 100, width=100, height=50, mask="auto")
+
+    # ✅ Title
+    p.setFont("Helvetica-Bold", 16)
+    p.drawString(200, height - 50, "🛒 Supermarket Receipt")
+
+    # ✅ Order Info
+    p.setFont("Helvetica", 12)
+    p.drawString(50, height - 140, f"Order ID: {order.id}")
+    p.drawString(50, height - 160, f"Customer: {order.customer.phone_number if order.customer else 'Guest'}")
+    p.drawString(50, height - 180, f"Status: {order.status}")
+    p.drawString(50, height - 200, f"Date: {order.created_at.strftime('%Y-%m-%d %H:%M')}")
+
+    # ✅ Order Items Table
+    y = height - 240
+    p.setFont("Helvetica-Bold", 12)
+    p.drawString(50, y, "Product")
+    p.drawString(250, y, "Qty")
+    p.drawString(300, y, "Price")
+    p.drawString(400, y, "Subtotal")
+
+    y -= 20
+    p.setFont("Helvetica", 11)
+    for item in order.items.all():
+        p.drawString(50, y, item.product.name)
+        p.drawString(250, y, str(item.quantity))
+        p.drawString(300, y, f"Ksh {item.price:.2f}")
+        p.drawString(400, y, f"Ksh {item.subtotal():.2f}")
+        y -= 20
+
+    # ✅ Total
+    y -= 30
+    p.setFont("Helvetica-Bold", 12)
+    p.drawString(50, y, f"Total: Ksh {order.total_price:.2f}")
+
+    # ✅ Generate QR Code (Order verification link)
+    qr_data = f"Order #{order.id} - Total: Ksh {order.total_price:.2f}"
+    qr = qrcode.make(qr_data)
+    qr_io = BytesIO()
+    qr.save(qr_io, format="PNG")
+    qr_io.seek(0)
+    qr_img = ImageReader(qr_io)
+
+    # Place QR code bottom-right
+    p.drawImage(qr_img, width - 150, 50, width=100, height=100)
+
+    # ✅ Footer
+    p.setFont("Helvetica-Oblique", 10)
+    p.drawString(50, 50, "Thank you for shopping with Supermarket!")
+    p.drawString(50, 35, "Powered by Django POS System")
+
+    # Save PDF
+    p.showPage()
+    p.save()
+    return response
+from django.shortcuts import get_object_or_404
+
+def verify_order(request, order_id):
+    """Verify an order by scanning QR code."""
+    order = get_object_or_404(Order, id=order_id)
+
+    return render(request, "product/verify_order.html", {
+        "order": order
+    })
+
+def get_client_ip(request):
+    """Helper to get client IP address"""
+    x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
+    if x_forwarded_for:
+        return x_forwarded_for.split(",")[0]
+    return request.META.get("REMOTE_ADDR")
+
+@login_required(login_url="/login/")  # optional: require login to verify
+def verify_order(request, order_id):
+    """Verify an order by scanning QR code and log attempt."""
+    order = get_object_or_404(Order, id=order_id)
+
+    # Log verification attempt
+    VerificationLog.objects.create(
+        order=order,
+        ip_address=get_client_ip(request),
+        user_agent=request.META.get("HTTP_USER_AGENT", ""),
+        verified_by=request.user if request.user.is_authenticated else None,
+    )
+
+    return render(request, "product/verify_order.html", {"order": order})
+
+# ---------- Customer Shopping ----------
+
+def checkout(request):
+    cart = request.session.get("cart", {})
+    if not cart:
+        messages.error(request, "Your cart is empty.")
+        return redirect("product_list")
+
+    if request.method == "POST":
+        phone_number = request.POST.get("phone_number")
+        customer, _ = Customer.objects.get_or_create(phone_number=phone_number)
+
+        # ✅ Create order WITHOUT deducting stock
+        order = Order.objects.create(customer=customer, status="PENDING", total_price=0)
+
+        total_price = 0
+        for product_id, qty in cart.items():
+            product = Product.objects.get(id=product_id)
+            subtotal = product.price * qty
+
+            # save items but do NOT reduce stock yet
+            OrderItem.objects.create(
+                order=order,
+                product=product,
+                quantity=qty,
+                price=product.price
+            )
+            total_price += subtotal
+
+        order.total_price = total_price
+        order.save()
+
+        request.session["cart"] = {}
+        messages.success(request, f"Order #{order.id} created. Awaiting payment.")
+        return redirect("receipt", order.id)  # show receipt or redirect to payment page
+
+    return render(request, "product/checkout.html")
+
+
+def apply_stock_deduction(order):
+    """Reduce stock for each item only once when order is PAID."""
+    if hasattr(order, "stock_deducted") and order.stock_deducted:
+        return  # prevent double deduction
+
+    for item in order.items.all():
+        if item.product.stock >= item.quantity:
+            item.product.stock -= item.quantity
+            item.product.save()
+
+            # log deduction
+            StockDeductionLog.objects.create(
+                product=item.product,
+                order=order,
+                quantity=item.quantity,
+                action="DEDUCT"
+            )
+
+    # mark order as stock already deducted
+    order.stock_deducted = True
+    order.save(update_fields=["stock_deducted"])
+
+
+@login_required
+@user_passes_test(is_cashier_or_owner)
+def mark_order_paid(request, order_id):
+    order = get_object_or_404(Order, id=order_id)
+
+    if order.status != "PAID":
+        order.status = "PAID"
+        order.save()
+
+        # Deduct stock once payment confirmed
+        apply_stock_deduction(order)
+
+        messages.success(request, f"Order #{order.id} marked as PAID and stock updated.")
+    else:
+        messages.warning(request, f"Order #{order.id} is already PAID.")
+
+    return redirect("product:dashboard")
+
+
+def apply_stock_deduction(order):
+    """Reduce stock for each item when order is PAID (only once)."""
+    for item in order.items.all():
+        if item.product.stock >= item.quantity:
+            item.product.stock -= item.quantity
+            item.product.save()
+
+
+
+
+# new logic using forms
+
+from django.shortcuts import render, redirect, get_object_or_404
+from django.contrib.auth.decorators import login_required, user_passes_test
+from django.contrib import messages
+from django.http import HttpResponse, FileResponse
+from django.utils.timezone import now, timedelta
+from django.db.models import Sum, Q
+from .models import Product, Order, OrderItem, Customer, VerificationLog, Shelf
+
+import io, json, os, qrcode
+import pandas as pd
+import matplotlib.pyplot as plt
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfgen import canvas
+from reportlab.lib.utils import ImageReader
+from openpyxl import Workbook
+from openpyxl.chart import LineChart, Reference, BarChart
+from django.conf import settings
+
+
+# ---------- Helpers ----------
+def is_cashier_or_owner(user):
+    """Check if user is staff (cashier/owner)."""
+    return user.is_authenticated and (user.is_staff or user.is_superuser)
+
+
+# ---------- Product CRUD (Cashier/Owner Only) ----------
+@login_required
+@user_passes_test(is_cashier_or_owner)
+def product_list_admin(request):
+    products = Product.objects.select_related("shelf").all()
+    return render(request, "product/product_list_admin.html", {"products": products})
+
+
+@login_required
+@user_passes_test(is_cashier_or_owner)
+def product_create(request):
+    if request.method == "POST":
+        shelf_id = request.POST.get("shelf")
+        shelf = Shelf.objects.get(id=shelf_id) if shelf_id else None
+        Product.objects.create(
+            name=request.POST.get("name"),
+            price=request.POST.get("price"),
+            stock=request.POST.get("stock"),
+            barcode=request.POST.get("barcode"),
+            shelf=shelf,
+        )
+        messages.success(request, "Product added successfully.")
+        return redirect("product_list_admin")
+
+    shelves = Shelf.objects.all()
+    return render(request, "product/product_form.html", {"shelves": shelves})
+
+
+@login_required
+@user_passes_test(is_cashier_or_owner)
+def product_edit(request, pk):
+    product = get_object_or_404(Product, pk=pk)
+    if request.method == "POST":
+        product.name = request.POST.get("name")
+        product.price = request.POST.get("price")
+        product.stock = request.POST.get("stock")
+        product.barcode = request.POST.get("barcode")
+        shelf_id = request.POST.get("shelf")
+        product.shelf = Shelf.objects.get(id=shelf_id) if shelf_id else None
+        product.save()
+        messages.success(request, "Product updated successfully.")
+        return redirect("product_list_admin")
+
+    shelves = Shelf.objects.all()
+    return render(request, "product/product_form.html", {"product": product, "shelves": shelves})
+
+
+@login_required
+@user_passes_test(is_cashier_or_owner)
+def product_delete(request, pk):
+    product = get_object_or_404(Product, pk=pk)
+    product.delete()
+    messages.success(request, "Product deleted successfully.")
+    return redirect("product_list_admin")
+
+
+# ---------- Customer Shopping ----------
+def product_list(request):
+    """Public view for all customers (no login required)."""
+    query = request.GET.get("q")
+    products = Product.objects.all()
+    if query:
+        products = products.filter(Q(name__icontains=query) | Q(barcode__icontains=query))
+
+    return render(request, "product/product_list.html", {"products": products})
+
+from decimal import Decimal
+from django.shortcuts import render
+from .models import Product
+
+def cart_view(request):
+    cart = request.session.get("cart", {})
+    items = []
+    total = Decimal("0.00")
+
+    for product_id, item_data in cart.items():
+        product = Product.objects.get(id=product_id)
+        quantity = item_data["quantity"]
+        price = Decimal(str(item_data["price"]))
+        subtotal = price * quantity
+
+        items.append({
+            "product": product,
+            "quantity": quantity,
+            "price": price,
+            "subtotal": subtotal
+        })
+        total += subtotal
+
+    return render(request, "product/cart.html", {"items": items, "total": total})
+
+
+
+from decimal import Decimal
+from django.shortcuts import render
+from .models import Product
+
+def cart_view(request):
+    cart = request.session.get("cart", {})
+    items = []
+    total = Decimal("0.00")
+
+    for product_id, item_data in cart.items():
+        product = Product.objects.get(id=product_id)
+
+        # handle both dict-style and int-style carts
+        if isinstance(item_data, dict):
+            quantity = item_data.get("quantity", 1)
+        else:
+            quantity = int(item_data)
+
+        subtotal = product.price * quantity
+        items.append({
+            "product": product,
+            "quantity": quantity,
+            "subtotal": subtotal
+        })
+        total += subtotal
+
+    return render(request, "product/cart.html", {"items": items, "total": total})
+
+
+from decimal import Decimal
+from django.shortcuts import render, redirect
+from django.contrib import messages
+from .models import Product, Customer, Order, OrderItem
+
+def checkout(request):
+    cart = request.session.get("cart", {})
+    if not cart:
+        messages.error(request, "Your cart is empty.")
+        return redirect("product:product_list")
+
+    # Build items for summary
+    items, total = [], Decimal("0.00")
+    for product_id, qty in cart.items():
+        product = Product.objects.get(id=product_id)
+        subtotal = product.price * qty
+        items.append({"product": product, "quantity": qty, "subtotal": subtotal})
+        total += subtotal
+
+    if request.method == "POST":
+        phone_number = request.POST.get("phone_number")
+        action = request.POST.get("action")  # either "place_order" or "pay_now"
+
+        # Create customer and order
+        customer, _ = Customer.objects.get_or_create(phone_number=phone_number)
+        order = Order.objects.create(customer=customer, status="pending", total_price=total)
+
+        for product_id, qty in cart.items():
+            product = Product.objects.get(id=product_id)
+            OrderItem.objects.create(order=order, product=product, quantity=qty)
+
+        # clear cart
+        request.session["cart"] = {}
+        request.session.modified = True
+
+        if action == "pay_now":
+            # ⚡ Directly trigger M-Pesa payment
+            return redirect("product:initiate_payment", order_id=order.id)
+
+        return redirect("product:receipt", order_id=order.id)
+
+    return render(request, "product/checkout.html", {"items": items, "total": total})
+
+
+# ---------- Dashboard + Reports ----------
+# product/views.py
+from django.shortcuts import render
+from django.contrib.auth.decorators import login_required, user_passes_test
+from django.db.models import Sum
+from django.utils.timezone import now
+from datetime import timedelta
+import json
+
+from .models import Order, Product, OrderItem
+from payment.models import Payment
+
+
+def is_cashier_or_owner(user):
+    return user.is_staff or user.is_superuser
+
+
+@login_required
+@user_passes_test(is_cashier_or_owner)
+def dashboard(request):
+    filter_option = request.GET.get("filter", "month")
+    today = now().date()
+
+    if filter_option == "today":
+        start_date = today
+    elif filter_option == "week":
+        start_date = today - timedelta(days=7)
+    else:
+        start_date = today - timedelta(days=30)
+
+    # Orders
+    paid_orders = Order.objects.filter(status="PAID", created_at__date__gte=start_date)
+    pending_orders = Order.objects.filter(status="PENDING", created_at__date__gte=start_date)
+    cancelled_orders = Order.objects.filter(status="CANCELLED", created_at__date__gte=start_date)
+    failed_orders = Order.objects.filter(status="FAILED", created_at__date__gte=start_date)
+
+    total_sales = paid_orders.aggregate(total=Sum("total_price"))["total"] or 0
+    total_orders = (
+        paid_orders.count()
+        + pending_orders.count()
+        + cancelled_orders.count()
+        + failed_orders.count()
+    )
+    total_products = Product.objects.count()
+    total_stock = Product.objects.aggregate(total=Sum("stock"))["total"] or 0
+
+    # Refunds
+    refunds = Payment.objects.filter(status="REFUNDED", transaction_date__date__gte=start_date)
+    refund_total = refunds.aggregate(total=Sum("amount"))["total"] or 0
+    refund_ratio = (refund_total / total_sales * 100) if total_sales > 0 else 0
+
+    # Uncollected
+    # uncollected_orders = Order.objects.filter(status="PAID").exclude(payment__isnull=True)
+    # uncollected_orders = Order.objects.filter(status="PAID").exclude(payments__isnull=True)
+    uncollected_orders = Order.objects.filter(status="PAID").exclude(payments__isnull=True)
+
+
+    low_stock_products = Product.objects.filter(stock__lte=5)
+    recent_orders = Order.objects.filter(created_at__date__gte=start_date).order_by("-created_at")[:10]
+
+    order_status_data = {
+        "Paid": paid_orders.count(),
+        "Pending": pending_orders.count(),
+        "Cancelled": cancelled_orders.count(),
+        "Failed": failed_orders.count(),
+        "Refunded": refunds.count(),
+    }
+
+    # Sales trend (7 days)
+    sales_trends = []
+    for i in range(7):
+        day = today - timedelta(days=i)
+        sales = (
+            Order.objects.filter(status="PAID", created_at__date=day)
+            .aggregate(total=Sum("total_price"))["total"]
+            or 0
+        )
+        sales_trends.append({"date": day.strftime("%Y-%m-%d"), "sales": sales})
+    sales_trends.reverse()
+
+    # Refund trend (7 days)
+    refunds_trends = []
+    for i in range(7):
+        day = today - timedelta(days=i)
+        refunds_count = Payment.objects.filter(status="REFUNDED", transaction_date__date=day).count()
+        refunds_trends.append({"date": day.strftime("%Y-%m-%d"), "refunds": refunds_count})
+    refunds_trends.reverse()
+
+    # Top products
+    top_products = (
+        OrderItem.objects.filter(order__status="PAID", order__created_at__date__gte=start_date)
+        .values("product__name", "product__shelf__name")
+        .annotate(total_sold=Sum("quantity"))
+        .order_by("-total_sold")[:5]
+    )
+    top_products_data = {
+        f"{item['product__name']} ({item['product__shelf__name']})": item["total_sold"]
+        for item in top_products
+    }
+
+    # Refund vs Sales donut chart
+    refund_vs_sales_data = {
+        "Sales": float(total_sales - refund_total),
+        "Refunds": float(refund_total),
+    }
+
+    return render(
+        request,
+        "product/dashboard.html",
+        {
+            "total_sales": total_sales,
+            "refund_total": refund_total,
+            "refund_ratio": refund_ratio,
+            "refund_vs_sales_data": json.dumps(refund_vs_sales_data),
+            "total_orders": total_orders,
+            "total_products": total_products,
+            "total_stock": total_stock,
+            "paid_count": paid_orders.count(),
+            "pending_count": pending_orders.count(),
+            "cancelled_count": cancelled_orders.count(),
+            "failed_count": failed_orders.count(),
+            "refund_count": refunds.count(),
+            "low_stock_products": low_stock_products,
+            "recent_orders": recent_orders,
+            "uncollected_orders": uncollected_orders,
+            "order_status_data": json.dumps(order_status_data),
+            "sales_trends": json.dumps(sales_trends),
+            "refunds_trends": json.dumps(refunds_trends),
+            "top_products_data": json.dumps(top_products_data),
+            "filter_option": filter_option,
+        },
+    )
+
+from django.shortcuts import redirect
+
+def update_cart(request, pk):
+    if request.method == "POST":
+        try:
+            new_qty = int(request.POST.get("quantity", 1))
+        except ValueError:
+            new_qty = 1  # fallback if input is not an integer
+
+        cart = request.session.get("cart", {})
+        product_id = str(pk)
+
+        if product_id in cart:
+            if new_qty > 0:
+                cart[product_id]["quantity"] = new_qty  # ✅ update only quantity
+            else:
+                cart.pop(product_id, None)  # safely remove if exists
+
+            request.session["cart"] = cart
+            request.session.modified = True
+
+    return redirect("product:cart")
+
+from django.contrib import messages
+
+def remove_from_cart(request, pk):
+    cart = request.session.get("cart", {})
+    product_id = str(pk)
+
+    if product_id in cart:
+        product_name = cart[product_id].get("name", "Item")
+        del cart[product_id]
+        request.session["cart"] = cart
+        request.session.modified = True
+        messages.info(request, f"{product_name} removed from cart.")
+
+    return redirect("product:cart")
+
+
+from django.shortcuts import redirect
+
+def clear_cart(request):
+    request.session["cart"] = {}
+    request.session.modified = True
+    return redirect("product:cart")
+
+
+
+from django.http import JsonResponse
+
+def check_payment_status(request, order_id):
+    order = get_object_or_404(Order, id=order_id)
+    return JsonResponse({"status": order.status})
+
+
+# refactor the cart/checkout flow so that stock only decreases when order is marked PAID
+
+
+import json
+import logging
+from django.conf import settings
+from django.db import transaction
+from django.http import HttpResponse, JsonResponse
+from django.shortcuts import get_object_or_404, render
+from django.utils import timezone
+from django.views.decorators.csrf import csrf_exempt
+
+from django_daraja.mpesa.core import MpesaClient
+
+from product.models import Order, Product
+from payment.models import Payment, StockDeductionLog
+
+cl = MpesaClient()
+logger = logging.getLogger(__name__)
+
+
+# ---------------- Utility: Idempotent Stock Deduction ---------------- #
+def _apply_stock_deduction(order, payment, source=StockDeductionLog.AUTO, user=None):
+    """
+    Deduct stock for all items in the order — idempotent.
+    Will NOT deduct again if already deducted for this payment.
+    """
+    if StockDeductionLog.objects.filter(order=order, payment=payment, action=StockDeductionLog.DEDUCT).exists():
+        logger.info("Stock deduction skipped (already done) for order %s, payment %s", order.id, payment.id)
+        return
+
+    for item in order.items.all():
+        product = item.product
+        if product.stock < item.quantity:
+            raise ValueError(f"Insufficient stock for {product.name}")
+        product.stock -= item.quantity
+        product.save()
+
+        StockDeductionLog.objects.create(
+            order=order,
+            payment=payment,
+            product=product,
+            quantity=item.quantity,
+            action=StockDeductionLog.DEDUCT,
+            source=source,
+            deducted_by=user,
+        )
+
+    logger.info("Stock deduction applied for order %s, payment %s", order.id, payment.id)
+
+
+# ---------------- Payment Initiation ---------------- #
+def initiate_payment(request, order_id):
+    if request.method != "POST":
+        return HttpResponse("Invalid request method. Use POST.", status=405)
+
+    order = get_object_or_404(Order, id=order_id)
+    phone_number = request.POST.get("phone_number") or request.POST.get("phone")
+    if not phone_number:
+        return HttpResponse("Phone number is required.", status=400)
+
+    try:
+        amount = float(order.total_price)
+    except Exception as exc:
+        logger.exception("Invalid order total for order %s: %s", order_id, exc)
+        return HttpResponse("Invalid order amount.", status=400)
+
+    callback_url = settings.BASE_URL.rstrip("/") + f"/payment/stk_push_callback/?order_id={order.id}"
+
+    try:
+        response = cl.stk_push(
+            phone_number,
+            amount,
+            account_reference=str(order.id),
+            transaction_desc=f"Payment for Order {order.id}",
+            callback_url=callback_url,
+        )
+    except Exception as e:
+        logger.exception("STK Push initiation failed for order %s: %s", order.id, e)
+        return HttpResponse(f"Payment initiation failed: {str(e)}", status=500)
+
+    payment = Payment.objects.create(
+        order=order,
+        amount=amount,
+        status=Payment.STATUS_CHOICES[0][0],  # "PENDING"
+        transaction_date=timezone.now(),
+    )
+
+    logger.info("STK Push initiated for order %s, payment id %s, response: %s", order.id, payment.id, response)
+    return render(request, "payment/payment_processing.html", {"order": order, "payment": payment, "daraja_response": response})
+
+
+# ---------------- Safaricom Callback ---------------- #
+from django.views.decorators.csrf import csrf_exempt
+from django.http import HttpResponse, JsonResponse
+from django.utils import timezone
+from django.db import transaction
+from django.core.mail import send_mail
+import json
+import logging
+
+from product.models import Order
+from payment.models import Payment, StockDeductionLog
+from payment.utils import apply_stock_deduction
+from payment.tasks import send_email_task, send_sms_task
+
+logger = logging.getLogger(__name__)
+
+
+# payment/views.py
+import json
+import logging
+from django.http import JsonResponse, HttpResponse
+from django.views.decorators.csrf import csrf_exempt
+from django.db import transaction
+from django.utils import timezone
+from product.models import Order, StockDeductionLog
+from .models import Payment
+from .tasks import send_email_task, send_sms_task  # Celery tasks
+
+@csrf_exempt
+def stk_push_callback(request):
+    if request.method != "POST":
+        return HttpResponse("Only POST allowed", status=405)
+
+    qs_order_id = request.GET.get("order_id")
+    try:
+        payload = json.loads(request.body.decode("utf-8"))
+    except Exception as exc:
+        logger.exception("Invalid JSON in STK callback: %s", exc)
+        return HttpResponse("Invalid JSON", status=400)
+
+    logger.info("📥 STK Callback payload: %s", json.dumps(payload))
+
+    stk_callback = payload.get("Body", {}).get("stkCallback", {})
+    result_code = stk_callback.get("ResultCode", -1)
+    metadata = stk_callback.get("CallbackMetadata", {}).get("Item", [])
+
+    # 🔎 Extract metadata
+    mpesa_receipt, amount, phone = None, None, None
+    for item in metadata:
+        if item.get("Name") == "MpesaReceiptNumber":
+            mpesa_receipt = item.get("Value")
+        elif item.get("Name") == "Amount":
+            amount = item.get("Value")
+        elif item.get("Name") == "PhoneNumber":
+            phone = item.get("Value")
+
+    # 🔎 Locate order
+    order = None
+    if qs_order_id:
+        order = Order.objects.filter(id=int(qs_order_id)).first()
+
+    if not order and amount:
+        candidate = Payment.objects.filter(
+            status=Payment.STATUS_PENDING, amount=amount
+        ).order_by("-id").first()
+        if candidate:
+            order = candidate.order
+
+    if not order:
+        logger.error("❌ Could not locate order for STK callback.")
+        return JsonResponse({"ResultCode": 0, "ResultDesc": "Order not found, logged"})
+
+    # 🔎 Get or create payment
+    payment = Payment.objects.filter(order=order).order_by("-id").first()
+    if not payment:
+        payment = Payment.objects.create(
+            order=order, amount=amount or order.total_price, status=Payment.STATUS_PENDING
+        )
+
+    # ⏳ Idempotency check
+    if payment.status == Payment.STATUS_PAID and order.status in (
+        "PAID",
+        "STOCK_DEDUCTED",
+    ):
+        logger.info("Duplicate STK callback ignored: order %s already processed", order.id)
+        return JsonResponse({"ResultCode": 0, "ResultDesc": "Already processed"})
+
+    try:
+        with transaction.atomic():
+            if int(result_code) == 0:
+                # ✅ Mark payment as PAID
+                payment.status = Payment.STATUS_PAID
+                payment.mpesa_receipt_no = mpesa_receipt
+                payment.transaction_date = timezone.now()
+                payment.save()
+
+                if order.status not in ("PAID", "STOCK_DEDUCTED"):
+                    order.status = "PAID"
+                    order.save(update_fields=["status"])
+
+                    applied = apply_stock_deduction(order, payment=payment, source=StockDeductionLog.AUTO)
+                    if applied:
+                        logger.info("✅ Stock deduction applied for order %s via STK callback", order.id)
+
+                # 📩 Queue confirmation (email + SMS) via Celery
+                subject = f"Payment Confirmation for Order #{order.id}"
+                message = (
+                    f"Dear Customer,\n\n"
+                    f"We have received your payment of KES {amount:.2f} for Order #{order.id}.\n"
+                    f"Mpesa Receipt: {mpesa_receipt}\n"
+                    f"Status: PAID ✅\n\n"
+                    f"Thank you for shopping with us!"
+                )
+
+                if getattr(order, "customer", None):
+                    email = getattr(order.customer, "email", None)
+                    if email:
+                        send_email_task.delay(subject, message, email)
+
+                if phone:
+                    send_sms_task.delay(phone, message)
+
+            else:
+                # ❌ Mark failed
+                payment.status = Payment.STATUS_FAILED
+                payment.transaction_date = timezone.now()
+                payment.save()
+
+                if order.status not in ("PAID", "CANCELLED", "FAILED"):
+                    order.status = "CANCELLED"
+                    order.save()
+
+    except Exception as exc:
+        logger.exception("⚠️ Error processing STK callback for order %s: %s", order.id, exc)
+        return JsonResponse({"ResultCode": 1, "ResultDesc": "Error processing callback"}, status=500)
+
+    return JsonResponse({"ResultCode": 0, "ResultDesc": "Callback processed"})
+
+
+
+# ---------------- Views for User Feedback ---------------- #
+def payment_success(request, order_id):
+    order = get_object_or_404(Order, id=order_id, status="PAID")
+    return render(request, "payment/payment_success.html", {"order": order})
+
+
+def payment_failed(request, order_id):
+    order = get_object_or_404(Order, id=order_id, status__in=["CANCELLED", "FAILED"])
+    return render(request, "payment/payment_failed.html", {"order": order})
+
+
+# ---------------- Order Cleanup ---------------- #
+def unpaid_orders_cleanup():
+    threshold = timezone.now() - timezone.timedelta(hours=72)
+    stale_orders = Order.objects.filter(status="PENDING", created_at__lt=threshold)
+    for order in stale_orders:
+        order.status = "CANCELLED"
+        order.save()
+        logger.info("Auto-cancelled stale order %s", order.id)
+
+
+# ---------------- Cancel Order ---------------- #
+def cancel_order(request, order_id):
+    order = get_object_or_404(Order, id=order_id)
+    order.status = "CANCELLED"
+    order.save()
+
+    # Cancel all related payments
+    Payment.objects.filter(order=order).update(status="CANCELLED")
+
+    return JsonResponse({"message": f"Order {order.id} has been cancelled."})
+
+
+
+
+import json
+import logging
+from django.conf import settings
+from django.db import transaction
+from django.http import HttpResponse, JsonResponse
+from django.shortcuts import get_object_or_404, render
+from django.utils import timezone
+from django.views.decorators.csrf import csrf_exempt
+
+from django_daraja.mpesa.core import MpesaClient
+
+from product.models import Order, Product
+from payment.models import Payment, StockDeductionLog
+
+cl = MpesaClient()
+logger = logging.getLogger(__name__)
+
+
+# ---------------- Utility: Idempotent Stock Deduction ---------------- #
+def _apply_stock_deduction(order, payment, source=StockDeductionLog.AUTO, user=None):
+    """
+    Deduct stock for all items in the order — idempotent.
+    Will NOT deduct again if already deducted for this payment.
+    """
+    if StockDeductionLog.objects.filter(order=order, payment=payment, action=StockDeductionLog.DEDUCT).exists():
+        logger.info("Stock deduction skipped (already done) for order %s, payment %s", order.id, payment.id)
+        return
+
+    for item in order.items.all():
+        product = item.product
+        if product.stock < item.quantity:
+            raise ValueError(f"Insufficient stock for {product.name}")
+        product.stock -= item.quantity
+        product.save()
+
+        StockDeductionLog.objects.create(
+            order=order,
+            payment=payment,
+            product=product,
+            quantity=item.quantity,
+            action=StockDeductionLog.DEDUCT,
+            source=source,
+            deducted_by=user,
+        )
+
+    logger.info("Stock deduction applied for order %s, payment %s", order.id, payment.id)
+
+
+# ---------------- Payment Initiation ---------------- #
+def initiate_payment(request, order_id):
+    if request.method != "POST":
+        return HttpResponse("Invalid request method. Use POST.", status=405)
+
+    order = get_object_or_404(Order, id=order_id)
+    phone_number = request.POST.get("phone_number") or request.POST.get("phone")
+    if not phone_number:
+        return HttpResponse("Phone number is required.", status=400)
+
+    try:
+        amount = float(order.total_price)
+    except Exception as exc:
+        logger.exception("Invalid order total for order %s: %s", order_id, exc)
+        return HttpResponse("Invalid order amount.", status=400)
+
+    callback_url = settings.BASE_URL.rstrip("/") + f"/payment/stk_push_callback/?order_id={order.id}"
+
+    try:
+        response = cl.stk_push(
+            phone_number,
+            amount,
+            account_reference=str(order.id),
+            transaction_desc=f"Payment for Order {order.id}",
+            callback_url=callback_url,
+        )
+    except Exception as e:
+        logger.exception("STK Push initiation failed for order %s: %s", order.id, e)
+        return HttpResponse(f"Payment initiation failed: {str(e)}", status=500)
+
+    payment = Payment.objects.create(
+        order=order,
+        amount=amount,
+        status=Payment.STATUS_CHOICES[0][0],  # "PENDING"
+        transaction_date=timezone.now(),
+    )
+
+    logger.info("STK Push initiated for order %s, payment id %s, response: %s", order.id, payment.id, response)
+    return render(request, "payment/payment_processing.html", {"order": order, "payment": payment, "daraja_response": response})
+
+
+# ---------------- Safaricom Callback ---------------- #
+from django.views.decorators.csrf import csrf_exempt
+from django.http import HttpResponse, JsonResponse
+from django.utils import timezone
+from django.db import transaction
+from django.core.mail import send_mail
+import json
+import logging
+
+from product.models import Order
+from payment.models import Payment, StockDeductionLog
+from payment.utils import apply_stock_deduction
+from payment.tasks import send_email_task, send_sms_task
+
+logger = logging.getLogger(__name__)
+
+
+# payment/views.py
+import json
+import logging
+from django.http import JsonResponse, HttpResponse
+from django.views.decorators.csrf import csrf_exempt
+from django.db import transaction
+from django.utils import timezone
+from product.models import Order, StockDeductionLog
+from .models import Payment
+from .tasks import send_email_task, send_sms_task  # Celery tasks
+
+logger = logging.getLogger(__name__)
+
+@csrf_exempt
+def stk_push_callback(request):
+    if request.method != "POST":
+        return HttpResponse("Only POST allowed", status=405)
+
+    qs_order_id = request.GET.get("order_id")
+    try:
+        payload = json.loads(request.body.decode("utf-8"))
+    except Exception as exc:
+        logger.exception("Invalid JSON in STK callback: %s", exc)
+        return HttpResponse("Invalid JSON", status=400)
+
+    logger.info("📥 STK Callback payload: %s", json.dumps(payload))
+
+    stk_callback = payload.get("Body", {}).get("stkCallback", {})
+    result_code = stk_callback.get("ResultCode", -1)
+    metadata = stk_callback.get("CallbackMetadata", {}).get("Item", [])
+
+    # 🔎 Extract metadata
+    mpesa_receipt, amount, phone = None, None, None
+    for item in metadata:
+        if item.get("Name") == "MpesaReceiptNumber":
+            mpesa_receipt = item.get("Value")
+        elif item.get("Name") == "Amount":
+            amount = item.get("Value")
+        elif item.get("Name") == "PhoneNumber":
+            phone = item.get("Value")
+
+    # 🔎 Locate order
+    order = None
+    if qs_order_id:
+        order = Order.objects.filter(id=int(qs_order_id)).first()
+
+    if not order and amount:
+        candidate = Payment.objects.filter(
+            status=Payment.STATUS_PENDING, amount=amount
+        ).order_by("-id").first()
+        if candidate:
+            order = candidate.order
+
+    if not order:
+        logger.error("❌ Could not locate order for STK callback.")
+        return JsonResponse({"ResultCode": 0, "ResultDesc": "Order not found, logged"})
+
+    # 🔎 Get or create payment
+    payment = Payment.objects.filter(order=order).order_by("-id").first()
+    if not payment:
+        payment = Payment.objects.create(
+            order=order, amount=amount or order.total_price, status=Payment.STATUS_PENDING
+        )
+
+    # ⏳ Idempotency check
+    if payment.status == Payment.STATUS_PAID and order.status in (
+        "PAID",
+        "STOCK_DEDUCTED",
+    ):
+        logger.info("Duplicate STK callback ignored: order %s already processed", order.id)
+        return JsonResponse({"ResultCode": 0, "ResultDesc": "Already processed"})
+
+    try:
+        with transaction.atomic():
+            if int(result_code) == 0:
+                # ✅ Mark payment as PAID
+                payment.status = Payment.STATUS_PAID
+                payment.mpesa_receipt_no = mpesa_receipt
+                payment.transaction_date = timezone.now()
+                payment.save()
+
+                if order.status not in ("PAID", "STOCK_DEDUCTED"):
+                    order.status = "PAID"
+                    order.save(update_fields=["status"])
+
+                    applied = apply_stock_deduction(order, payment=payment, source=StockDeductionLog.AUTO)
+                    if applied:
+                        logger.info("✅ Stock deduction applied for order %s via STK callback", order.id)
+
+                # 📩 Queue confirmation (email + SMS) via Celery
+                subject = f"Payment Confirmation for Order #{order.id}"
+                message = (
+                    f"Dear Customer,\n\n"
+                    f"We have received your payment of KES {amount:.2f} for Order #{order.id}.\n"
+                    f"Mpesa Receipt: {mpesa_receipt}\n"
+                    f"Status: PAID ✅\n\n"
+                    f"Thank you for shopping with us!"
+                )
+
+                if getattr(order, "customer", None):
+                    email = getattr(order.customer, "email", None)
+                    if email:
+                        send_email_task.delay(subject, message, email)
+
+                if phone:
+                    send_sms_task.delay(phone, message)
+
+            else:
+                # ❌ Mark failed
+                payment.status = Payment.STATUS_FAILED
+                payment.transaction_date = timezone.now()
+                payment.save()
+
+                if order.status not in ("PAID", "CANCELLED", "FAILED"):
+                    order.status = "CANCELLED"
+                    order.save()
+
+    except Exception as exc:
+        logger.exception("⚠️ Error processing STK callback for order %s: %s", order.id, exc)
+        return JsonResponse({"ResultCode": 1, "ResultDesc": "Error processing callback"}, status=500)
+
+    return JsonResponse({"ResultCode": 0, "ResultDesc": "Callback processed"})
+
+
+
+# ---------------- Views for User Feedback ---------------- #
+def payment_success(request, order_id):
+    order = get_object_or_404(Order, id=order_id, status="PAID")
+    return render(request, "payment/payment_success.html", {"order": order})
+
+
+def payment_failed(request, order_id):
+    order = get_object_or_404(Order, id=order_id, status__in=["CANCELLED", "FAILED"])
+    return render(request, "payment/payment_failed.html", {"order": order})
+
+
+# ---------------- Order Cleanup ---------------- #
+def unpaid_orders_cleanup():
+    threshold = timezone.now() - timezone.timedelta(hours=72)
+    stale_orders = Order.objects.filter(status="PENDING", created_at__lt=threshold)
+    for order in stale_orders:
+        order.status = "CANCELLED"
+        order.save()
+        logger.info("Auto-cancelled stale order %s", order.id)
+
+
+# ---------------- Cancel Order ---------------- #
+def cancel_order(request, order_id):
+    order = get_object_or_404(Order, id=order_id)
+    order.status = "CANCELLED"
+    order.save()
+
+    # Cancel all related payments
+    Payment.objects.filter(order=order).update(status="CANCELLED")
+
+    return JsonResponse({"message": f"Order {order.id} has been cancelled."})

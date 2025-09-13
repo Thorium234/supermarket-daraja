@@ -1,0 +1,270 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>📊 Supermarket Dashboard</h2>
+
+        <!-- Date Filter -->
+        <form method="get" class="d-flex">
+            <select name="filter" class="form-select" onchange="this.form.submit()">
+                <option value="today" {% if filter_option == "today" %}selected{% endif %}>Today</option>
+                <option value="week" {% if filter_option == "week" %}selected{% endif %}>This Week</option>
+                <option value="month" {% if filter_option == "month" %}selected{% endif %}>This Month</option>
+            </select>
+        </form>
+    </div>
+
+    <!-- Order Stats -->
+    <div class="row text-center mb-4">
+        <div class="col-md-3">
+            <div class="card bg-success text-white shadow">
+                <div class="card-body">
+                    <h5>Paid Orders</h5>
+                    <h2>{{ paid_count }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-warning text-dark shadow">
+                <div class="card-body">
+                    <h5>Pending Orders</h5>
+                    <h2>{{ pending_count }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-danger text-white shadow">
+                <div class="card-body">
+                    <h5>Cancelled Orders</h5>
+                    <h2>{{ cancelled_count }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-secondary text-white shadow">
+                <div class="card-body">
+                    <h5>Refunded Orders</h5>
+                    <h2>{{ refund_count }}</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Revenue, Refunds, Stock -->
+    <div class="row mb-4">
+        <!-- Sales -->
+        <div class="col-md-4">
+            <div class="card border-success shadow">
+                <div class="card-body text-center">
+                    <h5>Total Sales Revenue</h5>
+                    <h3>Ksh {{ total_sales|floatformat:2 }}</h3>
+                </div>
+            </div>
+        </div>
+
+        <!-- Refunds with Donut -->
+        <div class="col-md-4">
+            <div class="card border-danger shadow">
+                <div class="card-body text-center">
+                    <h5>Refunds ({{ refund_ratio|floatformat:1 }}% of Sales)</h5>
+                    <h3>Ksh {{ refund_total|floatformat:2 }}</h3>
+                    <canvas id="refundDonutChart" height="150"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Stock -->
+        <div class="col-md-4">
+            <div class="card border-primary shadow">
+                <div class="card-body text-center">
+                    <h5>Total Stock Available</h5>
+                    <h3>{{ total_stock }}</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Low Stock Alerts -->
+    <div class="card mb-4 shadow">
+        <div class="card-header bg-danger text-white">
+            ⚠️ Low Stock Alerts
+        </div>
+        <div class="card-body">
+            {% if low_stock_products %}
+                <ul>
+                {% for product in low_stock_products %}
+                    <li>{{ product.name }} - Only {{ product.stock }} left</li>
+                {% endfor %}
+                </ul>
+            {% else %}
+                <p>✅ All products are sufficiently stocked.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Recent Orders -->
+    <div class="card shadow mb-4">
+        <div class="card-header bg-dark text-white">
+            🛒 Recent Orders
+        </div>
+        <div class="card-body">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Order ID</th>
+                        <th>Customer</th>
+                        <th>Status</th>
+                        <th>Total</th>
+                        <th>Date</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for order in recent_orders %}
+                    <tr>
+                        <td>#{{ order.id }}</td>
+                        <td>{{ order.customer.phone_number }}</td>
+                        <td>
+                            {% if order.status == "paid" %}
+                                <span class="badge bg-success">Paid</span>
+                            {% elif order.status == "pending" %}
+                                <span class="badge bg-warning text-dark">Pending</span>
+                            {% else %}
+                                <span class="badge bg-danger">Cancelled</span>
+                            {% endif %}
+                        </td>
+                        <td>Ksh {{ order.total_price|floatformat:2 }}</td>
+                        <td>{{ order.created_at|date:"Y-m-d H:i" }}</td>
+                    </tr>
+                {% empty %}
+                    <tr><td colspan="5" class="text-center">No recent orders.</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Charts Row -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card shadow">
+                <div class="card-header">📌 Orders by Status</div>
+                <div class="card-body">
+                    <canvas id="orderStatusChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card shadow">
+                <div class="card-header">📈 Sales Trends (Last 7 Days)</div>
+                <div class="card-body">
+                    <canvas id="salesTrendsChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Refund Trends -->
+    <div class="card shadow mb-4">
+        <div class="card-header">💸 Refund Trends (Last 7 Days)</div>
+        <div class="card-body">
+            <canvas id="refundsTrendsChart"></canvas>
+        </div>
+    </div>
+
+    <!-- Top Selling Products -->
+    <div class="card shadow mb-5">
+        <div class="card-header">🏆 Top Selling Products</div>
+        <div class="card-body">
+            <canvas id="topProductsChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    // Orders by Status Pie Chart
+    const orderStatusData = JSON.parse('{{ order_status_data|escapejs }}');
+    new Chart(document.getElementById('orderStatusChart').getContext('2d'), {
+        type: 'pie',
+        data: {
+            labels: Object.keys(orderStatusData),
+            datasets: [{
+                data: Object.values(orderStatusData),
+                backgroundColor: ['#28a745', '#ffc107', '#dc3545', '#6c757d']
+            }]
+        }
+    });
+
+    // Sales Trends Line Chart
+    const salesTrendsData = JSON.parse('{{ sales_trends|escapejs }}');
+    new Chart(document.getElementById('salesTrendsChart').getContext('2d'), {
+        type: 'line',
+        data: {
+            labels: salesTrendsData.map(item => item.date),
+            datasets: [{
+                label: 'Daily Sales (Ksh)',
+                data: salesTrendsData.map(item => item.sales),
+                borderColor: '#007bff',
+                fill: false,
+                tension: 0.3
+            }]
+        },
+        options: { scales: { y: { beginAtZero: true } } }
+    });
+
+    // Refunds Trends Line Chart
+    const refundsTrendsData = JSON.parse('{{ refunds_trends|escapejs }}');
+    new Chart(document.getElementById('refundsTrendsChart').getContext('2d'), {
+        type: 'line',
+        data: {
+            labels: refundsTrendsData.map(item => item.date),
+            datasets: [{
+                label: 'Refunds (Count)',
+                data: refundsTrendsData.map(item => item.refunds),
+                borderColor: '#dc3545',
+                backgroundColor: '#f5c6cb',
+                fill: true,
+                tension: 0.3
+            }]
+        },
+        options: { scales: { y: { beginAtZero: true } } }
+    });
+
+    // Refunds vs Sales Donut Chart
+    const refundVsSalesData = JSON.parse('{{ refund_vs_sales_data|escapejs }}');
+    new Chart(document.getElementById('refundDonutChart').getContext('2d'), {
+        type: 'doughnut',
+        data: {
+            labels: Object.keys(refundVsSalesData),
+            datasets: [{
+                data: Object.values(refundVsSalesData),
+                backgroundColor: ['#28a745', '#dc3545'], // Sales = green, Refunds = red
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { position: 'bottom' } },
+            cutout: '70%'
+        }
+    });
+
+    // Top Selling Products Bar Chart
+    const topProductsData = JSON.parse('{{ top_products_data|escapejs }}');
+    new Chart(document.getElementById('topProductsChart').getContext('2d'), {
+        type: 'bar',
+        data: {
+            labels: Object.keys(topProductsData),
+            datasets: [{
+                label: 'Units Sold',
+                data: Object.values(topProductsData),
+                backgroundColor: '#17a2b8'
+            }]
+        },
+        options: { indexAxis: 'y', scales: { x: { beginAtZero: true } } }
+    });
+</script>
+{% endblock %}

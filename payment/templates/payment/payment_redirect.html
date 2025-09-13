@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container text-center mt-5">
+    <h4>Redirecting to M-Pesa payment…</h4>
+    <form id="pay-form" method="post" action="{% url 'payment:initiate_payment' order.id %}">
+        {% csrf_token %}
+        <input type="hidden" name="phone_number" value="{{ phone_number }}">
+    </form>
+</div>
+<script>
+    document.getElementById("pay-form").submit();
+</script>
+{% endblock %}

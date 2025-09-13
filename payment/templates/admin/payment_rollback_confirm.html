@@ -1,0 +1,17 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+  <h2>Confirm Rollback</h2>
+
+  {% if already_rolled_back %}
+    <p><strong>⚠ Stock has already been rolled back</strong> for Payment #{{ payment.id }}.</p>
+    <a href="../../{{ payment.id }}/change/" class="button">Back</a>
+  {% else %}
+    <p>You are about to <strong>rollback stock</strong> for Payment <b>#{{ payment.id }}</b> 
+       (Order #{{ payment.order.id }}, Amount: {{ payment.amount }}).</p>
+
+    <form method="post">{% csrf_token %}
+      <input type="submit" value="✅ Yes, Rollback" class="default button">
+      <a href="../../{{ payment.id }}/change/" class="button cancel-button">Cancel</a>
+    </form>
+  {% endif %}
+{% endblock %}

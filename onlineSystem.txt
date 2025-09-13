@@ -1,0 +1,37 @@
+online app
+jumia,alibaba,killmal like e-commerce
+product details are like 
+product_picture
+name
+Description
+stock availbale
+initialstock 
+percentages
+
+so this is an app inside
+our supermarket and the first thing the customer sees is the landing page either he or she should choose if she is on our shop we deal with the normal app we have but if onlibe the logic is here in writings .
+
+First thing the loading page will be the firast thing the customer sees and will be take to the dashboard 
+then for online he will have to login/signup becouse we will have an accountapp where one will have to login with that but for now we just use the default django app authentiation.
+
+the user will be taken to the profile where he/she can update the infor or proceed to the oline shoping and orxering
+
+so when you are an olinebuyer you will be able to see your history and purchases you have been doing,orders or the carts
+
+you will see availabele goods the remaining percentage its wde will also have transportation cost for the availbale goodyou will add to cart the whatever goods you have selected then you will either choose what you will pay in each we will have thepayment buttons for individual goods or all goods at once you can do order and pay you will terack your product for the priod given 
+
+you can add to cart then continue shoping or pay then when you visit the cart page you can either decide to remove some products from the cart or increase quantity.
+For the online you have to pay before the delivery is done to the nearest agent then the number of days it will take for the product to reach you can be able to trank the days as you will be updated when the agent gets the cord he will be required to enter a unique number of the product through search then your information will be displayed or the order then he/she will click on delivery button and he will be able to call you manually{automatic calls will be udsted in future}
+the number of days inthe week will be there based on number of days you have to receive your product
+real time google map api can help us so that the customer sees where the product has reached to motivate him/her so that he will see the travellig distance and the progress of the good shipping.he will be impressed .
+
+on payment we are going to use daraja api just the same as in the manual and it does the payment related staffs email notifications will be availabe 
+
+the customer is allowed to plan for the future we have a real time calender and he/she can go to a future day and place an order and he will be notified about the order through notification  for example the customer will want on x-mass has to buy a television during december ceremonies he wikll also be allowed to do so 
+
+the sytem should be eye catching so that when one clicks on the product he will be shown some graphs so that he can see that this good is really on demand and the graph will be stock against time it will be of motivation
+Dynamic in real time it shows real time burchases in minutees this can just be system faking to motivate the customer to know that he is not the only one  burchasing the good evn in seconds it canfake the purchases based on stock available 
+
+for good organizations and help the customer goods are arranged in shelves_dashboard and when you click on card of phones you will be be just taken to only phones product meaning that before upload you will be taken to phones section or page only the system filters then one can see the analysis for that specific products eg most bought phones,newly brand phones, he will see the new phone updated when the good is uploaded and the cureent location the buyer will see the specific goods found  in his own town like Bungoma one can choose there current location 
+the sytem will calculate the km then convert to get speed  becuse number of days will be given already the user can track and see current location of the good shipping 
+  
