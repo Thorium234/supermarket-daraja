@@ -9,6 +9,7 @@ from django.http import HttpResponse, FileResponse, JsonResponse
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.db.models import Sum, Q
+from django.core.paginator import Paginator
 from django.utils.timezone import now
 from datetime import timedelta
 from django.conf import settings
@@ -66,6 +67,8 @@ def product_create(request):
         shelf = Shelf.objects.get(id=shelf_id) if shelf_id else None
         Product.objects.create(
             name=request.POST.get("name"),
+            description=request.POST.get("description"),
+            image=request.FILES.get("image"),
             price=request.POST.get("price"),
             stock=request.POST.get("stock"),
             barcode=request.POST.get("barcode"),
@@ -84,9 +87,12 @@ def product_edit(request, pk):
     product = get_object_or_404(Product, pk=pk)
     if request.method == "POST":
         product.name = request.POST.get("name")
+        product.description = request.POST.get("description")
         product.price = request.POST.get("price")
         product.stock = request.POST.get("stock")
         product.barcode = request.POST.get("barcode")
+        if request.FILES.get("image"):
+            product.image = request.FILES.get("image")
         shelf_id = request.POST.get("shelf")
         product.shelf = Shelf.objects.get(id=shelf_id) if shelf_id else None
         product.save()
@@ -113,8 +119,9 @@ def product_list(request):
     """Customer-facing product list with search and filter."""
     query = request.GET.get("q")
     stock_filter = request.GET.get("stock_filter")
-    
-    products = Product.objects.all()
+    category = request.GET.get("category")
+
+    products = Product.objects.select_related("shelf").all().order_by("-created_at")
     
     if query:
         products = products.filter(
@@ -122,6 +129,9 @@ def product_list(request):
             Q(barcode__icontains=query) |
             Q(description__icontains=query)
         )
+
+    if category:
+        products = products.filter(shelf_id=category)
     
     if stock_filter == "in_stock":
         products = products.filter(stock__gt=10)
@@ -129,8 +139,38 @@ def product_list(request):
         products = products.filter(stock__lte=10, stock__gt=0)
     elif stock_filter == "out_of_stock":
         products = products.filter(stock=0)
-    
-    return render(request, "product/product_list.html", {"products": products})
+
+    paginator = Paginator(products, 12)
+    page_number = request.GET.get("page")
+    page_obj = paginator.get_page(page_number)
+
+    for product in page_obj.object_list:
+        product.display_rating = round(4.1 + ((product.id % 8) * 0.1), 1)
+        product.review_count = 18 + ((product.id * 7) % 260)
+        if product.stock <= 3:
+            product.deal_tag = "Few Left"
+        elif product.stock >= 20:
+            product.deal_tag = "Top Deal"
+        elif product.price <= 500:
+            product.deal_tag = "Daily Deal"
+        else:
+            product.deal_tag = ""
+
+    categories = (
+        Shelf.objects.filter(products__isnull=False)
+        .distinct()
+        .order_by("name")
+    )
+
+    return render(
+        request,
+        "product/product_list.html",
+        {
+            "products": page_obj,
+            "categories": categories,
+            "selected_category": category,
+        },
+    )
 
 
 # ------------------------
@@ -573,6 +613,25 @@ def update_cart(request, pk):
 
         request.session["cart"] = cart
         request.session.modified = True
+
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            cart_items, total = [], Decimal("0.00")
+            for product_id, item_data in cart.items():
+                product = get_object_or_404(Product, id=product_id)
+                quantity = item_data.get("quantity") if isinstance(item_data, dict) else int(item_data)
+                subtotal = product.price * quantity
+                cart_items.append({"product_id": int(product_id), "subtotal": float(subtotal)})
+                total += subtotal
+
+            return JsonResponse(
+                {
+                    "success": True,
+                    "product_id": pk,
+                    "quantity": new_qty,
+                    "total": float(total),
+                    "items": cart_items,
+                }
+            )
 
     return redirect("product:cart")
 

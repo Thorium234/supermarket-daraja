@@ -2,170 +2,192 @@
 {% load static %}
 
 {% block content %}
-<div class="container">
-    <!-- Page Header -->
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2 class="mb-0">
-            <i class="fas fa-store me-2 text-primary"></i>🛒 Available Products
-        </h2>
-        <a href="{% url 'product:cart' %}" class="btn btn-outline-primary">
-            <i class="fas fa-shopping-basket me-1"></i>View Cart ({{ cart_count|default:0 }})
-        </a>
-    </div>
-
-    <!-- Search and Filter Bar -->
-    <div class="card mb-4">
-        <div class="card-body">
-            <form method="get" class="row g-3">
-                <div class="col-md-6">
-                    <div class="input-group">
-                        <span class="input-group-text"><i class="fas fa-search"></i></span>
-                        <input type="text" name="q" class="form-control" 
-                               placeholder="Search by name or barcode..." 
-                               value="{{ request.GET.q|default:'' }}">
-                    </div>
-                </div>
-                <div class="col-md-3">
-                    <select name="stock_filter" class="form-select" onchange="this.form.submit()">
-                        <option value="">All Stock</option>
-                        <option value="in_stock" {% if request.GET.stock_filter == 'in_stock' %}selected{% endif %}>
-                            In Stock Only
-                        </option>
-                        <option value="low_stock" {% if request.GET.stock_filter == 'low_stock' %}selected{% endif %}>
-                            Low Stock
-                        </option>
-                        <option value="out_of_stock" {% if request.GET.stock_filter == 'out_of_stock' %}selected{% endif %}>
-                            Out of Stock
-                        </option>
-                    </select>
-                </div>
-                <div class="col-md-3">
-                    <button type="submit" class="btn btn-primary w-100">
-                        <i class="fas fa-filter me-1"></i>Filter
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- Results Info -->
-    {% if request.GET.q %}
-    <div class="mb-3">
-        <span class="text-muted">Showing results for: "<strong>{{ request.GET.q }}</strong>"</span>
-    </div>
-    {% endif %}
-
-    <!-- Products Grid -->
-    {% if products %}
-    <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 row-cols-xl-4 g-4">
-        {% for product in products %}
-        <div class="col">
-            <div class="product-card h-100">
-                <!-- Product Image Placeholder -->
-                <div class="product-image">
-                    <i class="fas fa-box-open"></i>
-                </div>
-                <div class="card-body d-flex flex-column">
-                    <h5 class="card-title mb-1">{{ product.name }}</h5>
-                    <p class="text-muted small mb-2">
-                        <i class="fas fa-barcode me-1"></i>{{ product.barcode|default:"N/A" }}
-                    </p>
-                    
-                    <div class="d-flex justify-content-between align-items-center mb-2">
-                        <span class="product-price">KES {{ product.price|floatformat:2 }}</span>
-                        {% if product.stock > 10 %}
-                            <span class="badge badge-in-stock">
-                                <i class="fas fa-check me-1"></i>In Stock ({{ product.stock }})
-                            </span>
-                        {% elif product.stock > 0 %}
-                            <span class="badge badge-low-stock">
-                                <i class="fas fa-exclamation me-1"></i>Low Stock ({{ product.stock }})
-                            </span>
-                        {% else %}
-                            <span class="badge badge-out-of-stock">
-                                <i class="fas fa-times me-1"></i>Out of Stock
-                            </span>
-                        {% endif %}
-                    </div>
-                    
-                    {% if product.shelf %}
-                    <p class="small text-muted mb-3">
-                        <i class="fas fa-map-marker-alt me-1"></i>{{ product.shelf.name }}
-                    </p>
-                    {% endif %}
-                    
-                    <div class="mt-auto">
-                        {% if product.stock > 0 %}
-                        <a href="{% url 'product:add_to_cart' product.id %}" 
-                           class="btn btn-success w-100"
-                           onclick="showLoading('Adding {{ product.name }} to cart...')">
-                            <i class="fas fa-plus me-1"></i>Add to Cart
+<div class="container marketplace-page">
+    <section class="market-hero mb-4">
+        <div class="row g-3 align-items-stretch">
+            <div class="col-lg-8">
+                <div class="market-hero-main h-100">
+                    <p class="market-kicker mb-2">Smart Grocery Marketplace</p>
+                    <h2 class="mb-3">Shop fast deals, pay with M-Pesa, collect with confidence.</h2>
+                    <p class="mb-4">Daily discounted essentials, low stock alerts, and instant receipt verification in one flow.</p>
+                    <div class="d-flex flex-wrap gap-2">
+                        <a href="{% url 'product:cart' %}" class="btn btn-market-main">
+                            <i class="fas fa-shopping-basket me-1"></i>View Cart ({{ cart_count|default:0 }})
                         </a>
-                        {% else %}
-                        <button class="btn btn-secondary w-100" disabled>
-                            <i class="fas fa-times me-1"></i>Sold Out
-                        </button>
-                        {% endif %}
+                        <a href="#grid-start" class="btn btn-market-ghost">
+                            <i class="fas fa-bolt me-1"></i>Shop Now
+                        </a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-4">
+                <div class="market-promo-stack h-100">
+                    <div class="promo-card promo-orange">
+                        <h6 class="mb-1">Flash Offers</h6>
+                        <p class="mb-0 small">Selected essentials at better prices.</p>
+                    </div>
+                    <div class="promo-card promo-blue">
+                        <h6 class="mb-1">Secure Checkout</h6>
+                        <p class="mb-0 small">M-Pesa STK push with live payment status.</p>
+                    </div>
+                    <div class="promo-card promo-green">
+                        <h6 class="mb-1">Fast Support</h6>
+                        <p class="mb-0 small">Track order + receipt from your dashboard.</p>
                     </div>
                 </div>
             </div>
         </div>
+    </section>
+
+    <div class="market-toolbar card mb-4">
+        <div class="card-body">
+            <form method="get" class="row g-3 align-items-end">
+                <div class="col-lg-5">
+                    <label class="form-label mb-1">Search Products</label>
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="fas fa-search"></i></span>
+                        <input type="text" name="q" class="form-control"
+                               placeholder="Try: sugar, milk, barcode..."
+                               value="{{ request.GET.q|default:'' }}">
+                    </div>
+                </div>
+                <div class="col-lg-3">
+                    <label class="form-label mb-1">Stock State</label>
+                    <select name="stock_filter" class="form-select">
+                        <option value="">All Stock</option>
+                        <option value="in_stock" {% if request.GET.stock_filter == 'in_stock' %}selected{% endif %}>In Stock</option>
+                        <option value="low_stock" {% if request.GET.stock_filter == 'low_stock' %}selected{% endif %}>Low Stock</option>
+                        <option value="out_of_stock" {% if request.GET.stock_filter == 'out_of_stock' %}selected{% endif %}>Out of Stock</option>
+                    </select>
+                </div>
+                <div class="col-lg-2">
+                    <label class="form-label mb-1">Category</label>
+                    <select name="category" class="form-select">
+                        <option value="">All Categories</option>
+                        {% for shelf in categories %}
+                        <option value="{{ shelf.id }}" {% if selected_category == shelf.id|stringformat:"s" %}selected{% endif %}>{{ shelf.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-lg-2">
+                    <button type="submit" class="btn btn-market-main w-100">
+                        <i class="fas fa-sliders-h me-1"></i>Apply
+                    </button>
+                </div>
+            </form>
+
+            <div class="market-chip-row mt-3">
+                <a class="market-chip {% if not selected_category %}active{% endif %}" href="?q={{ request.GET.q|default:'' }}&stock_filter={{ request.GET.stock_filter|default:'' }}">All</a>
+                {% for shelf in categories %}
+                <a class="market-chip {% if selected_category == shelf.id|stringformat:'s' %}active{% endif %}"
+                   href="?q={{ request.GET.q|default:'' }}&stock_filter={{ request.GET.stock_filter|default:'' }}&category={{ shelf.id }}">{{ shelf.name }}</a>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    {% if request.GET.q %}
+    <p class="text-muted mb-3">Showing results for "<strong>{{ request.GET.q }}</strong>"</p>
+    {% endif %}
+
+    {% if products %}
+    <div class="row row-cols-1 row-cols-sm-2 row-cols-lg-3 row-cols-xl-4 g-4" id="grid-start">
+                {% for product in products %}
+        <div class="col">
+            <article class="product-card market-product-card h-100">
+                <div class="product-image">
+                    {% if product.image %}
+                    <img src="{{ product.image.url }}" alt="{{ product.name }}" class="product-image-tag">
+                    {% else %}
+                    <div class="product-image-fallback">
+                        <i class="fas fa-box-open"></i>
+                    </div>
+                    {% endif %}
+                    {% if product.deal_tag %}
+                    <span class="deal-pill">{{ product.deal_tag }}</span>
+                    {% endif %}
+                </div>
+                <div class="card-body d-flex flex-column">
+                    <div class="d-flex justify-content-between align-items-start mb-1">
+                        <h6 class="card-title mb-0">{{ product.name }}</h6>
+                        <span class="category-pill">{{ product.shelf.name|default:"General" }}</span>
+                    </div>
+                    <div class="rating-row mb-2">
+                        <i class="fas fa-star"></i>
+                        <span>{{ product.display_rating }}</span>
+                        <small class="text-muted">({{ product.review_count }})</small>
+                    </div>
+                    <p class="text-muted small mb-2">
+                        <i class="fas fa-barcode me-1"></i>{{ product.barcode|default:"N/A" }}
+                    </p>
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <span class="product-price">KES {{ product.price|floatformat:2 }}</span>
+                        {% if product.stock > 10 %}
+                            <span class="badge badge-in-stock">In stock</span>
+                        {% elif product.stock > 0 %}
+                            <span class="badge badge-low-stock">Only {{ product.stock }}</span>
+                        {% else %}
+                            <span class="badge badge-out-of-stock">Sold out</span>
+                        {% endif %}
+                    </div>
+                    <div class="mt-auto">
+                        {% if product.stock > 0 %}
+                        <button type="button"
+                                class="btn btn-market-main w-100"
+                                onclick="quickAddToCart({{ product.id }}, '{{ product.name|escapejs }}')">
+                            <i class="fas fa-cart-plus me-1"></i>Add to Cart
+                        </button>
+                        {% else %}
+                        <button class="btn btn-secondary w-100" disabled>
+                            <i class="fas fa-ban me-1"></i>Unavailable
+                        </button>
+                        {% endif %}
+                    </div>
+                </div>
+            </article>
+        </div>
         {% endfor %}
     </div>
-    
-    <!-- Pagination -->
+
     {% if products.paginator.num_pages > 1 %}
     <nav aria-label="Product pagination" class="mt-4">
-        <ul class="pagination justify-content-center">
+        <ul class="pagination justify-content-center market-pagination">
             {% if products.has_previous %}
             <li class="page-item">
-                <a class="page-link" href="?page=1&q={{ request.GET.q|default:'' }}">&laquo; First</a>
-            </li>
-            <li class="page-item">
-                <a class="page-link" href="?page={{ products.previous_page_number }}&q={{ request.GET.q|default:'' }}">Previous</a>
+                <a class="page-link" href="?page=1&q={{ request.GET.q|default:'' }}&stock_filter={{ request.GET.stock_filter|default:'' }}&category={{ selected_category|default:'' }}">First</a>
             </li>
             {% endif %}
-            
             {% for num in products.paginator.page_range %}
             {% if products.number == num %}
             <li class="page-item active"><span class="page-link">{{ num }}</span></li>
             {% elif num > products.number|add:-3 and num < products.number|add:3 %}
-            <li class="page-item"><a class="page-link" href="?page={{ num }}&q={{ request.GET.q|default:'' }}">{{ num }}</a></li>
+            <li class="page-item"><a class="page-link" href="?page={{ num }}&q={{ request.GET.q|default:'' }}&stock_filter={{ request.GET.stock_filter|default:'' }}&category={{ selected_category|default:'' }}">{{ num }}</a></li>
             {% endif %}
             {% endfor %}
-            
             {% if products.has_next %}
             <li class="page-item">
-                <a class="page-link" href="?page={{ products.next_page_number }}&q={{ request.GET.q|default:'' }}">Next</a>
-            </li>
-            <li class="page-item">
-                <a class="page-link" href="?page={{ products.paginator.num_pages }}&q={{ request.GET.q|default:'' }}">Last &raquo;</a>
+                <a class="page-link" href="?page={{ products.next_page_number }}&q={{ request.GET.q|default:'' }}&stock_filter={{ request.GET.stock_filter|default:'' }}&category={{ selected_category|default:'' }}">Next</a>
             </li>
             {% endif %}
         </ul>
     </nav>
     {% endif %}
-    
     {% else %}
-    <!-- Empty State -->
     <div class="empty-state">
-        <div class="empty-state-icon">
-            <i class="fas fa-box-open"></i>
-        </div>
-        <h3 class="empty-state-title">No Products Available</h3>
-        <p class="empty-state-text">We're currently restocking. Please check back later.</p>
-        <a href="{% url 'product:product_list' %}" class="btn btn-primary">
-            <i class="fas fa-sync-alt me-1"></i>Refresh
+        <div class="empty-state-icon"><i class="fas fa-box-open"></i></div>
+        <h3 class="empty-state-title">No Products Found</h3>
+        <p class="empty-state-text">Try another category or reset your filters.</p>
+        <a href="{% url 'product:product_list' %}" class="btn btn-market-main">
+            <i class="fas fa-sync-alt me-1"></i>Reset Filters
         </a>
     </div>
     {% endif %}
 </div>
 
 <script>
-// Quick add with quantity via AJAX
-function quickAddToCart(productId, quantity = 1) {
+function quickAddToCart(productId, productName) {
     showLoading('Adding to cart...');
-    
+
     fetch(`/cart/add/${productId}/`, {
         method: 'GET',
         headers: {
@@ -176,7 +198,7 @@ function quickAddToCart(productId, quantity = 1) {
     .then(data => {
         if (data.success) {
             updateCartCount();
-            showToast('success', `${data.product_name} added to cart!`);
+            showToast('success', `${productName} added to cart!`);
         }
         hideLoading();
     })
@@ -203,4 +225,3 @@ function updateCartCount() {
 }
 </script>
 {% endblock %}
-

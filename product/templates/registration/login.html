@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+    .market-auth-wrap {
+        max-width: 1040px;
+        margin: 1.5rem auto;
+    }
+    .market-auth-card {
+        border: none;
+        border-radius: 16px;
+        overflow: hidden;
+        box-shadow: 0 18px 44px rgba(24, 32, 56, 0.12);
+    }
+    .market-auth-hero {
+        background: linear-gradient(145deg, #f68b1e 0%, #f25c05 100%);
+        color: #fff;
+        min-height: 100%;
+        padding: 2.2rem;
+    }
+    .market-auth-hero h2 {
+        font-weight: 800;
+        letter-spacing: .02em;
+    }
+    .market-auth-hero p {
+        opacity: .95;
+    }
+    .market-auth-form {
+        background: #fff;
+        padding: 2.2rem;
+    }
+    .market-pill {
+        display: inline-block;
+        padding: .35rem .75rem;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, .2);
+        font-size: .8rem;
+        font-weight: 700;
+        margin-bottom: .85rem;
+    }
+    .market-form-title {
+        font-weight: 800;
+        color: #1f2b46;
+    }
+    .market-auth-form .form-control {
+        border: 1px solid #d7deea;
+        border-radius: 10px;
+        padding: .72rem .9rem;
+    }
+    .market-auth-form .form-control:focus {
+        border-color: #f68b1e;
+        box-shadow: 0 0 0 .2rem rgba(246, 139, 30, .22);
+    }
+    .btn-market {
+        background: #f68b1e;
+        border-color: #f68b1e;
+        color: #fff;
+        border-radius: 10px;
+        font-weight: 700;
+    }
+    .btn-market:hover {
+        background: #e77908;
+        border-color: #e77908;
+        color: #fff;
+    }
+</style>
+
+<div class="market-auth-wrap">
+    <div class="card market-auth-card">
+        <div class="row g-0">
+            <div class="col-lg-5">
+                <div class="market-auth-hero h-100 d-flex flex-column justify-content-between">
+                    <div>
+                        <span class="market-pill">Marketplace Access</span>
+                        <h2 class="mb-3">Welcome back</h2>
+                        <p class="mb-0">Sign in to manage products, view live orders, and monitor payment status.</p>
+                    </div>
+                    <div class="small mt-4">
+                        <i class="fas fa-shield-alt me-1"></i>
+                        Secure cashier and admin access
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-7">
+                <div class="market-auth-form">
+                    <h4 class="market-form-title mb-3">Login</h4>
+
+                    {% if form.errors %}
+                    <div class="alert alert-danger py-2">
+                        Invalid username or password.
+                    </div>
+                    {% endif %}
+
+                    <form method="post" novalidate>
+                        {% csrf_token %}
+                        <div class="mb-3">
+                            <label for="{{ form.username.id_for_label }}" class="form-label">Username</label>
+                            {{ form.username }}
+                        </div>
+                        <div class="mb-3">
+                            <label for="{{ form.password.id_for_label }}" class="form-label">Password</label>
+                            {{ form.password }}
+                        </div>
+                        {% if next %}
+                        <input type="hidden" name="next" value="{{ next }}">
+                        {% endif %}
+                        <button type="submit" class="btn btn-market w-100 py-2">
+                            <i class="fas fa-sign-in-alt me-1"></i> Sign In
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

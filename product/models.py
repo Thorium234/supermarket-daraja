@@ -19,6 +19,7 @@ class Product(models.Model):
     """Represents an item in the supermarket."""
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True, null=True)
+    image = models.ImageField(upload_to="products/", blank=True, null=True)
     barcode = models.CharField(max_length=100, unique=True, blank=True, null=True)
     price = models.DecimalField(max_digits=10, decimal_places=2)
     stock = models.PositiveIntegerField(default=0)

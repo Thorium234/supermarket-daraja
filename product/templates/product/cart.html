@@ -1,13 +1,13 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="container">
-    <!-- Page Header -->
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2 class="mb-0">
-            <i class="fas fa-shopping-basket me-2 text-success"></i>🛒 Your Shopping Cart
-        </h2>
-        <a href="{% url 'product:product_list' %}" class="btn btn-outline-primary">
+<div class="container market-cart-shell">
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+        <div>
+            <h2 class="mb-1"><i class="fas fa-shopping-basket me-2 text-success"></i> Your Cart</h2>
+            <p class="text-muted mb-0">Review items, adjust quantity, then checkout securely.</p>
+        </div>
+        <a href="{% url 'product:product_list' %}" class="btn btn-market-ghost">
             <i class="fas fa-arrow-left me-1"></i>Continue Shopping
         </a>
     </div>
@@ -26,21 +26,21 @@
         </div>
     </div>
 
-    <div class="row">
+    <div class="row g-4">
         <!-- Cart Items -->
         <div class="col-lg-8">
-            <div class="card">
-                <div class="card-header bg-white">
+            <div class="card checkout-card-elevated">
+                <div class="card-header bg-white border-bottom">
                     <h5 class="mb-0">
                         <i class="fas fa-list me-2"></i>Cart Items ({{ items|length }})
                     </h5>
                 </div>
                 <div class="card-body p-0">
                     {% for item in items %}
-                    <div class="cart-item">
+                    <div class="cart-item cart-row-item">
                         <div class="row align-items-center">
                             <div class="col-md-2">
-                                <div class="product-image bg-primary" style="height: 80px;">
+                                <div class="product-image bg-primary" style="height: 86px; border-radius: 12px;">
                                     <i class="fas fa-box"></i>
                                 </div>
                             </div>
@@ -81,7 +81,7 @@
                                 </form>
                             </div>
                             <div class="col-md-2 text-end">
-                                <h6 class="mb-0 text-success">KES {{ item.subtotal|floatformat:2 }}</h6>
+                                <h6 class="mb-0 text-success" id="subtotal-{{ item.product.id }}">KES {{ item.subtotal|floatformat:2 }}</h6>
                             </div>
                             <div class="col-md-1 text-end">
                                 <a href="{% url 'product:remove_from_cart' item.product.id %}" 
@@ -106,8 +106,8 @@
 
         <!-- Order Summary -->
         <div class="col-lg-4">
-            <div class="card">
-                <div class="card-header bg-primary text-white">
+            <div class="card checkout-card-elevated sticky-summary">
+                <div class="card-header bg-primary text-white border-bottom-0">
                     <h5 class="mb-0">
                         <i class="fas fa-receipt me-2"></i>Order Summary
                     </h5>
@@ -115,7 +115,7 @@
                 <div class="card-body">
                     <div class="d-flex justify-content-between mb-2">
                         <span>Subtotal ({{ items|length }} items)</span>
-                        <span class="fw-bold">KES {{ total|floatformat:2 }}</span>
+                        <span class="fw-bold" id="summary-subtotal">KES {{ total|floatformat:2 }}</span>
                     </div>
                     <div class="d-flex justify-content-between mb-2">
                         <span>Tax (0%)</span>
@@ -124,10 +124,10 @@
                     <hr>
                     <div class="d-flex justify-content-between mb-3">
                         <span class="h5 mb-0">Total</span>
-                        <span class="h5 mb-0 text-success">KES {{ total|floatformat:2 }}</span>
+                        <span class="h5 mb-0 text-success" id="summary-total">KES {{ total|floatformat:2 }}</span>
                     </div>
                     
-                    <a href="{% url 'product:checkout' %}" class="btn btn-success btn-lg w-100"
+                    <a href="{% url 'product:checkout' %}" class="btn btn-market-main btn-lg w-100"
                        onclick="showLoading('Proceeding to checkout...')">
                         <i class="fas fa-credit-card me-2"></i>Proceed to Checkout
                     </a>
@@ -143,7 +143,7 @@
             </div>
 
             <!-- Need Help Card -->
-            <div class="card mt-3">
+            <div class="card mt-3 checkout-card-elevated">
                 <div class="card-body">
                     <h6><i class="fas fa-question-circle me-2"></i>Need Help?</h6>
                     <p class="small text-muted mb-2">Contact our support team for assistance.</p>
@@ -221,7 +221,7 @@ function updateQuantity(productId, change) {
         .then(data => {
             if (data.success) {
                 input.value = newQty;
-                updateCartTotals();
+                updateCartTotals(data);
                 showToast('success', 'Cart updated!');
             }
             hideLoading();
@@ -233,21 +233,18 @@ function updateQuantity(productId, change) {
     }
 }
 
-function updateCartTotals() {
-    // Refresh page to show updated totals
-    location.reload();
-}
-
-// Update max attribute on quantity inputs
-document.addEventListener('DOMContentLoaded', function() {
-    const inputs = document.querySelectorAll('.quantity-input');
-    inputs.forEach(input => {
-        const max = input.getAttribute('max');
-        if (max) {
-            input.setAttribute('data-max', max);
+function updateCartTotals(data) {
+    if (!data || !data.items) return;
+    data.items.forEach(item => {
+        const el = document.getElementById(`subtotal-${item.product_id}`);
+        if (el) {
+            el.textContent = `KES ${Number(item.subtotal).toFixed(2)}`;
         }
     });
-});
+    const subtotalEl = document.getElementById('summary-subtotal');
+    const totalEl = document.getElementById('summary-total');
+    if (subtotalEl) subtotalEl.textContent = `KES ${Number(data.total).toFixed(2)}`;
+    if (totalEl) totalEl.textContent = `KES ${Number(data.total).toFixed(2)}`;
+}
 </script>
 {% endblock %}
-
