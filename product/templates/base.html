@@ -2,55 +2,122 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Supermarket System</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🛒 Supermarket System</title>
+    <meta name="description" content="Modern supermarket management system with MPesa payment integration">
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{% static 'product/css/styles.css' %}">
 </head>
 <body class="d-flex flex-column min-vh-100">
 
-            <!-- Navbar -->
-            <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
-                <div class="container">
-                    <a class="navbar-brand fw-bold" href="{% url 'product:product_list' %}">🏪 Supermarket</a>
-                        <li class="nav-item"><a class="nav-link" href="{% url 'product:product_list' %}">Shop</a></li> 
-                        <li class="nav-item">
-                            <a class="nav-link position-relative" href="{% url 'product:cart' %}">
-                                🛒 Cart
-                                {% if cart_count > 0 %}
-                                <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
-                                    {{ cart_count }}
-                                </span>
-                                {% endif %}
-                            </a>
-                        </li>
-
-
-                        {% if user.is_staff %}
-                            <li class="nav-item"><a class="nav-link" href="{% url 'product:dashboard' %}">Dashboard</a></li>
-                            <li class="nav-item"><a class="nav-link" href="{% url 'product:product_list_admin' %}">Manage Products</a></li>
-                        {% endif %}
-
-
-                    {% comment %} {% if user.is_authenticated %}
-                        <li class="nav-item"><a class="nav-link" href="{% url 'logout' %}">Logout</a></li>
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary sticky-top">
+        <div class="container">
+            <a class="navbar-brand fw-bold" href="{% url 'product:product_list' %}">
+                <i class="fas fa-shopping-cart me-2"></i>Supermarket
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.resolver_match.url_name == 'product_list' %}active{% endif %}" 
+                           href="{% url 'product:product_list' %}">
+                            <i class="fas fa-store me-1"></i> Shop
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link position-relative {% if request.resolver_match.url_name == 'cart' %}active{% endif %}" 
+                           href="{% url 'product:cart' %}">
+                            <i class="fas fa-shopping-basket me-1"></i> Cart
+                            {% if cart_count > 0 %}
+                            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger pulse">
+                                {{ cart_count }}
+                            </span>
+                            {% endif %}
+                        </a>
+                    </li>
+                    
+                    {% if user.is_staff %}
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle {% if 'dashboard' in request.resolver_match.url_name %}active{% endif %}" 
+                           href="#" role="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-tachometer-alt me-1"></i> Dashboard
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="{% url 'product:dashboard' %}">
+                                <i class="fas fa-chart-line me-2"></i>Overview</a></li>
+                            <li><a class="dropdown-item" href="{% url 'product:product_list_admin' %}">
+                                <i class="fas fa-boxes me-2"></i>Products</a></li>
+                            <li><a class="dropdown-item" href="{% url 'product:export_excel' %}">
+                                <i class="fas fa-file-excel me-2"></i>Export Report</a></li>
+                        </ul>
+                    </li>
+                    {% endif %}
+                </ul>
+                
+                <!-- Search Form -->
+                <form class="d-flex me-3 search-box" method="get" action="{% url 'product:product_list' %}">
+                    <i class="fas fa-search search-box-icon"></i>
+                    <input type="search" name="q" class="form-control" 
+                           placeholder="Search products..." 
+                           value="{{ request.GET.q|default:'' }}">
+                </form>
+                
+                <!-- User Menu -->
+                <ul class="navbar-nav">
+                    {% if user.is_authenticated %}
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-user me-1"></i>{{ user.username }}
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li><a class="dropdown-item" href="#">
+                                <i class="fas fa-cog me-2"></i>Settings</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="{% url 'logout' %}">
+                                <i class="fas fa-sign-out-alt me-2"></i>Logout</a></li>
+                        </ul>
+                    </li>
                     {% else %}
-                        <li class="nav-item"><a class="nav-link" href="{% url 'login' %}">Login</a></li>
-                    {% endif %} {% endcomment %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'login' %}">
+                            <i class="fas fa-sign-in-alt me-1"></i>Login
+                        </a>
+                    </li>
+                    {% endif %}
                 </ul>
             </div>
         </div>
     </nav>
 
     <!-- Main Content -->
-    <main class="container my-4 flex-grow-1">
+    <main class="container my-4 flex-grow-1 fade-in">
         {% if messages %}
-            <div class="alert-messages">
+            <div class="toast-container">
                 {% for message in messages %}
-                    <div class="alert alert-info alert-dismissible fade show" role="alert">
-                        {{ message }}
-                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                <div class="toast toast-{{ message.tags }}" role="alert">
+                    <div class="d-flex">
+                        <div class="toast-body">
+                            {% if message.tags == 'success' %}
+                                <i class="fas fa-check-circle text-success me-2"></i>
+                            {% elif message.tags == 'error' %}
+                                <i class="fas fa-exclamation-circle text-danger me-2"></i>
+                            {% elif message.tags == 'warning' %}
+                                <i class="fas fa-exclamation-triangle text-warning me-2"></i>
+                            {% else %}
+                                <i class="fas fa-info-circle text-info me-2"></i>
+                            {% endif %}
+                            {{ message }}
+                        </div>
+                        <button type="button" class="btn-close me-2 m-auto" data-bs-dismiss="toast"></button>
                     </div>
+                </div>
                 {% endfor %}
             </div>
         {% endif %}
@@ -59,13 +126,76 @@
     </main>
 
     <!-- Footer -->
-    <footer class="bg-light text-center text-muted py-3 mt-auto">
+    <footer class="bg-dark text-white py-4 mt-auto">
         <div class="container">
-            <small>&copy; {{ now|date:"Y" }} Supermarket System. All rights reserved.</small>
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <h5><i class="fas fa-shopping-cart me-2"></i>Supermarket</h5>
+                    <p class="text-muted">Your one-stop shop for all groceries with easy MPesa payments.</p>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <h5>Quick Links</h5>
+                    <ul class="list-unstyled">
+                        <li><a href="{% url 'product:product_list' %}">Browse Products</a></li>
+                        <li><a href="{% url 'product:cart' %}">View Cart</a></li>
+                        {% if user.is_staff %}
+                        <li><a href="{% url 'product:dashboard' %}">Dashboard</a></li>
+                        {% endif %}
+                    </ul>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <h5>Contact</h5>
+                    <p><i class="fas fa-phone me-2"></i>+254 700 000 000</p>
+                    <p><i class="fas fa-envelope me-2"></i>info@supermarket.com</p>
+                </div>
+            </div>
+            <hr>
+            <div class="text-center">
+                <small>&copy; {{ now|date:"Y" }} Supermarket System. All rights reserved.</small>
+            </div>
         </div>
     </footer>
 
+    <!-- Loading Overlay (hidden by default) -->
+    <div id="loadingOverlay" class="loading-overlay" style="display: none;">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">Processing...</div>
+    </div>
+
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Toast initialization -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize all toasts
+            var toastElList = [].slice.call(document.querySelectorAll('.toast'));
+            var toastList = toastElList.map(function(toastEl) {
+                return new bootstrap.Toast(toastEl, {
+                    autohide: true,
+                    delay: 5000
+                });
+            });
+            toastList.forEach(toast => toast.show());
+        });
+
+        // Global loading functions
+        function showLoading(message = 'Processing...') {
+            document.getElementById('loadingOverlay').style.display = 'flex';
+            document.querySelector('.loading-text').textContent = message;
+        }
+
+        function hideLoading() {
+            document.getElementById('loadingOverlay').style.display = 'none';
+        }
+
+        // Show loading on form submissions
+        document.querySelectorAll('form').forEach(form => {
+            form.addEventListener('submit', function() {
+                showLoading('Submitting...');
+            });
+        });
+    </script>
 </body>
 </html>
+

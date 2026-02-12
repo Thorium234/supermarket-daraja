@@ -2,88 +2,126 @@
 {% load qr_code %}
 
 {% block content %}
-<div class="container mt-4">
-    <h2 class="mb-3">🧾 Receipt for Order #{{ order.id }}</h2>
-    <p>Thank you for shopping with us!</p>
+<div class="container">
+    <div class="receipt-container">
+        <!-- Receipt Header -->
+        <div class="receipt-header">
+            <h3 class="mb-1">
+                <i class="fas fa-receipt me-2 text-primary"></i>🧾 Receipt
+            </h3>
+            <p class="text-muted mb-0">Order #{{ order.id }}</p>
+        </div>
 
-    <!-- Order Info -->
-    <div class="row mb-3">
-        <div class="col-md-6">
-            <p><b>Receipt No:</b> {{ receipt_no }}</p>
-            <p><b>Date:</b> {{ transaction_date }}</p>
-            <p><b>Phone:</b> {{ phone_number }}</p>
-            
-            <!-- ✅ Show M-Pesa receipt if available -->
-            {% if payment and payment.mpesa_receipt_no %}
-                <p><b>Mpesa Receipt No:</b> {{ payment.mpesa_receipt_no }}</p>
-            {% endif %}
+        <!-- Order Info -->
+        <div class="row mb-3">
+            <div class="col-6">
+                <p class="mb-1"><strong>Receipt No:</strong></p>
+                <p class="text-muted small">{{ receipt_no }}</p>
+            </div>
+            <div class="col-6 text-end">
+                <p class="mb-1"><strong>Date:</strong></p>
+                <p class="text-muted small">{{ transaction_date }}</p>
+            </div>
+        </div>
 
-            <p><b>Status:</b>
+        <div class="row mb-3">
+            <div class="col-6">
+                <p class="mb-1"><strong>Phone:</strong></p>
+                <p class="text-muted small">{{ phone_number }}</p>
+            </div>
+            <div class="col-6 text-end">
+                <p class="mb-1"><strong>Status:</strong></p>
                 <span id="order-status">
                     {% if order.status == "PAID" %}
                         <span class="badge bg-success">Paid</span>
                     {% elif order.status == "PENDING" %}
                         <span class="badge bg-warning text-dark">Pending</span>
                     {% else %}
-                        <span class="badge bg-danger">Cancelled</span>
+                        <span class="badge bg-danger">{{ order.status }}</span>
                     {% endif %}
                 </span>
+            </div>
+        </div>
+
+        <!-- MPesa Receipt -->
+        {% if payment and payment.mpesa_receipt_no %}
+        <div class="alert alert-success mb-3">
+            <p class="mb-0 small">
+                <i class="fas fa-check-circle me-1"></i>
+                <strong>M-Pesa Receipt:</strong> {{ payment.mpesa_receipt_no }}
             </p>
         </div>
-        <div class="col-md-6 text-end">
-            <!-- ✅ QR Code (order verification) -->
-            {% qr_from_text request.build_absolute_uri|cut:request.get_full_path|add:"order/verify/"|add:order.id|stringformat:"s" size="L" image_format="png" %}
-            <p class="small mt-2">📱 Scan to verify this order</p>
+        {% endif %}
+
+        <!-- Order Items -->
+        <div class="receipt-items">
+            <table class="table table-sm">
+                <thead class="table-light">
+                    <tr>
+                        <th>Product</th>
+                        <th class="text-center">Qty</th>
+                        <th class="text-end">Price</th>
+                        <th class="text-end">Subtotal</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in order.items.all %}
+                    <tr>
+                        <td>{{ item.product.name }}</td>
+                        <td class="text-center">{{ item.quantity }}</td>
+                        <td class="text-end">KES {{ item.price|floatformat:2 }}</td>
+                        <td class="text-end">KES {{ item.subtotal|floatformat:2 }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td colspan="3" class="text-end fw-bold">Total:</td>
+                        <td class="text-end fw-bold text-success h5 mb-0">KES {{ order.total_price|floatformat:2 }}</td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+
+        <!-- QR Code -->
+        <div class="text-center my-3">
+            {% qr_from_text request.build_absolute_uri|slice:":-10"|add:order.id|add:"/order/verify/"|add:order.id|stringformat:"s" size="L" image_format="png" %}
+            <p class="small text-muted mt-2">
+                <i class="fas fa-qrcode me-1"></i>Scan to verify this order
+            </p>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="d-flex flex-wrap gap-2 justify-content-center mt-4">
+            <a href="{% url 'receipt_pdf' order.id %}" class="btn btn-danger">
+                <i class="fas fa-file-pdf me-1"></i>Download PDF
+            </a>
+            
+            {% if payment and payment.mpesa_receipt_no %}
+            {% with phone=order.customer.phone_number|default:"254700000000" %}
+            <a href="https://wa.me/{{ phone|slice:"3:" }}?text={{ "✅ Order #"|add:order.id|add:" has been PAID. Receipt: "|add:payment.mpesa_receipt_no|add:". Total: KES "|add:order.total_price|floatformat:2|urlencode }}" 
+               target="_blank" class="btn btn-success">
+                <i class="fab fa-whatsapp me-1"></i>Share on WhatsApp
+            </a>
+            {% endwith %}
+            {% endif %}
+            
+            {% if order.status != "PAID" %}
+            <button id="refresh-btn" class="btn btn-primary" onclick="checkPaymentStatus()">
+                <i class="fas fa-sync-alt me-1"></i>Refresh Status
+            </button>
+            {% endif %}
+        </div>
+
+        <!-- Message -->
+        <div class="text-center mt-4">
+            <p class="text-muted mb-0">
+                <i class="fas fa-heart text-danger me-1"></i>
+                Thank you for shopping with us!
+            </p>
+            <small class="text-muted">Please come again</small>
         </div>
     </div>
-
-    <!-- Order Items -->
-    <table class="table table-bordered">
-        <thead class="table-light">
-            <tr>
-                <th>Product</th>
-                <th>Quantity</th>
-                <th>Price (Ksh)</th>
-                <th>Subtotal</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for item in order.items.all %}
-            <tr>
-                <td>{{ item.product.name }}</td>
-                <td>{{ item.quantity }}</td>
-                <td>{{ item.price }}</td>
-                <td>{{ item.subtotal }}</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-
-    <h4 class="mt-3">💰 Total: <b>Ksh {{ order.total_price }}</b></h4>
-
-    <!-- PDF Download Button -->
-    <a href="{% url 'receipt_pdf' order.id %}" class="btn btn-danger mt-3">
-        📝 Download PDF
-    </a>
-
-    <!-- ✅ Send via WhatsApp -->
-    <a href="https://wa.me/{{ phone_number }}?text=✅ Your order #{{ order.id }} has been PAID. 
-    Download receipt here: {{ request.build_absolute_uri }}"
-    target="_blank" class="btn btn-success mt-3 ms-2">
-    💬 Send via WhatsApp
-    </a>
-
-    <!-- ✅ Send via SMS -->
-    <a href="{% url 'send_receipt_sms' order.id %}" class="btn btn-primary mt-3 ms-2">
-    📩 Send via SMS
-    </a>
-
-    <!-- ✅ Refresh Now Button (only if not paid) -->
-    {% if order.status != "PAID" %}
-    <button id="refresh-btn" class="btn btn-primary mt-3 ms-2">
-        🔄 Refresh Now
-    </button>
-    {% endif %}
 </div>
 
 <!-- Script to check payment status -->
@@ -93,31 +131,42 @@ document.addEventListener("DOMContentLoaded", function () {
     const orderStatus = document.getElementById("order-status");
 
     function checkStatus() {
+        showLoading('Checking payment status...');
+        
         fetch("{% url 'check_payment_status' order.id %}")
             .then(res => res.json())
             .then(data => {
                 if (data.status === "PAID") {
                     orderStatus.innerHTML = '<span class="badge bg-success">Paid</span>';
-                    if (refreshBtn) refreshBtn.style.display = "none"; // hide button
-                    location.reload(); // reload to update receipt with payment details
+                    showToast('success', 'Payment successful!');
+                    if (refreshBtn) {
+                        refreshBtn.style.display = "none";
+                    }
+                    setTimeout(() => {
+                        location.reload();
+                    }, 2000);
                 } else {
-                    orderStatus.innerHTML =
-                        '<span class="badge bg-warning text-dark">' + data.status + '</span>';
+                    orderStatus.innerHTML = '<span class="badge bg-warning text-dark">' + data.status + '</span>';
+                    showToast('info', 'Payment is still pending. Please complete payment on your phone.');
                 }
+                hideLoading();
             })
-            .catch(() => console.log("Error checking payment status."));
+            .catch(error => {
+                console.log("Error checking payment status.");
+                hideLoading();
+            });
     }
 
-    // ✅ Manual refresh
+    // Manual refresh
     if (refreshBtn) {
         refreshBtn.addEventListener("click", checkStatus);
     }
 
-    // ✅ Auto-refresh every 10 seconds until paid
+    // Auto-refresh every 10 seconds until paid
     const interval = setInterval(function () {
         checkStatus();
     }, 10000);
 });
 </script>
-
 {% endblock %}
+

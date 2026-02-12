@@ -1,4 +1,3 @@
-# product/views.py
 from decimal import Decimal
 import io, os, json, qrcode
 import matplotlib.pyplot as plt
@@ -39,6 +38,16 @@ def get_client_ip(request):
 
 
 # ------------------------
+# AJAX: Cart Count
+# ------------------------
+def cart_count_ajax(request):
+    """Return cart item count as JSON for AJAX updates."""
+    cart = request.session.get("cart", {})
+    count = sum(item.get("quantity", 1) if isinstance(item, dict) else 1 for item in cart.values())
+    return JsonResponse({"count": count})
+
+
+# ------------------------
 # Product CRUD
 # ------------------------
 @login_required
@@ -62,7 +71,7 @@ def product_create(request):
             shelf=shelf,
         )
         messages.success(request, "Product added successfully.")
-        return redirect("product_list_admin")
+        return redirect("product:product_list_admin")
 
     shelves = Shelf.objects.all()
     return render(request, "product/product_form.html", {"shelves": shelves})
@@ -81,7 +90,7 @@ def product_edit(request, pk):
         product.shelf = Shelf.objects.get(id=shelf_id) if shelf_id else None
         product.save()
         messages.success(request, "Product updated successfully.")
-        return redirect("product_list_admin")
+        return redirect("product:product_list_admin")
 
     shelves = Shelf.objects.all()
     return render(request, "product/product_form.html", {"product": product, "shelves": shelves})
@@ -93,18 +102,33 @@ def product_delete(request, pk):
     product = get_object_or_404(Product, pk=pk)
     product.delete()
     messages.success(request, "Product deleted successfully.")
-    return redirect("product_list_admin")
+    return redirect("product:product_list_admin")
 
 
 # ------------------------
 # Public Shopping
 # ------------------------
 def product_list(request):
-    """Customer-facing product list."""
+    """Customer-facing product list with search and filter."""
     query = request.GET.get("q")
+    stock_filter = request.GET.get("stock_filter")
+    
     products = Product.objects.all()
+    
     if query:
-        products = products.filter(Q(name__icontains=query) | Q(barcode__icontains=query))
+        products = products.filter(
+            Q(name__icontains=query) | 
+            Q(barcode__icontains=query) |
+            Q(description__icontains=query)
+        )
+    
+    if stock_filter == "in_stock":
+        products = products.filter(stock__gt=10)
+    elif stock_filter == "low_stock":
+        products = products.filter(stock__lte=10, stock__gt=0)
+    elif stock_filter == "out_of_stock":
+        products = products.filter(stock=0)
+    
     return render(request, "product/product_list.html", {"products": products})
 
 
@@ -126,6 +150,7 @@ def cart_view(request):
 
 
 def add_to_cart(request, pk):
+    """Add product to cart and return JSON response for AJAX."""
     product = get_object_or_404(Product, pk=pk)
     cart = request.session.get("cart", {})
     pk_str = str(pk)
@@ -140,34 +165,9 @@ def add_to_cart(request, pk):
 
     request.session["cart"] = cart
     request.session.modified = True
-    messages.success(request, f"{product.name} added to cart.")
-    return redirect("product:cart")
-
-
-# ------------------------
-# Checkout + Orders
-# ------------------------
-from django.shortcuts import render, redirect, get_object_or_404
-from django.contrib import messages
-from decimal import Decimal
-from .models import Product, Customer, Order, OrderItem
-
-def checkout(request):
-    """Guest checkout (no login required)."""
-    cart = request.session.get("cart", {})
-    if not cart:
-        messages.error(request, "Your cart is empty.")
-        return redirect("product:product_list")
-
-    # Prepare cart items
-    items, total = [], Decimal("0.00")
-    for product_id, qty in cart.items():
-        product = get_object_or_404(Product, id=product_id)
-        quantity = qty["quantity"] if isinstance(qty, dict) else qty
-        subtotal = product.price * quantity
-        items.append({
-            "product": product,
-            "quantity": quantity,
+    
+    # Return JSON response for AJAX
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             "subtotal": subtotal,
         })
         total += subtotal

@@ -2,94 +2,269 @@
 {% load qr_code %}
 
 {% block content %}
-<div class="container mt-4">
-    <h2 class="mb-3">🛒 Checkout</h2>
+<div class="container">
+    <!-- Page Header -->
+    <div class="text-center mb-4">
+        <h2>
+            <i class="fas fa-credit-card me-2 text-success"></i>🛒 Checkout
+        </h2>
+        <p class="text-muted">Complete your order with secure MPesa payment</p>
+    </div>
 
-    <!-- Cart Items -->
-    <table class="table table-bordered">
-        <thead class="table-light">
-            <tr>
-                <th>Product</th>
-                <th>Quantity</th>
-                <th>Price (Ksh)</th>
-                <th>Subtotal</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for item in items %}
-            <tr>
-                <td>{{ item.product.name }}</td>
-                <td>{{ item.quantity }}</td>
-                <td>{{ item.product.price }}</td>
-                <td>{{ item.subtotal }}</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+    <!-- Checkout Progress -->
+    <div class="checkout-progress mb-4">
+        <div class="checkout-step completed">
+            <i class="fas fa-shopping-cart me-1"></i>Cart
+        </div>
+        <div class="checkout-step completed">
+            <i class="fas fa-check me-1"></i>Review
+        </div>
+        <div class="checkout-step {% if not order %}active{% endif %}">
+            <i class="fas fa-credit-card me-1"></i>Payment
+        </div>
+        <div class="checkout-step">
+            <i class="fas fa-check-circle me-1"></i>Complete
+        </div>
+    </div>
 
-    <h4 class="mt-3">💰 Total: <b>Ksh {{ total }}</b></h4>
+    <div class="row">
+        <!-- Order Summary -->
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-list me-2"></i>Order Items ({{ items|length }})
+                    </h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Product</th>
+                                    <th>Quantity</th>
+                                    <th>Price</th>
+                                    <th class="text-end">Subtotal</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in items %}
+                                <tr>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <div class="bg-primary rounded p-2 me-2" style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;">
+                                                <i class="fas fa-box text-white"></i>
+                                            </div>
+                                            <div>
+                                                <strong>{{ item.product.name }}</strong>
+                                                {% if item.product.barcode %}
+                                                <br><small class="text-muted">SKU: {{ item.product.barcode }}</small>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>{{ item.quantity }}</td>
+                                    <td>KES {{ item.product.price|floatformat:2 }}</td>
+                                    <td class="text-end fw-bold">KES {{ item.subtotal|floatformat:2 }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                            <tfoot class="table-light">
+                                <tr>
+                                    <td colspan="3" class="text-end"><strong>Total:</strong></td>
+                                    <td class="text-end"><strong class="h4 text-success">KES {{ total }}</strong></td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+            </div>
 
-    <!-- Checkout Form (always point to initiate-payment) -->
-                {% if not order %}
-                    <form method="post" class="mt-4">
+            <!-- Payment Instructions -->
+            <div class="card mt-4">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-info-circle me-2"></i>How to Pay
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <ol class="mb-0">
+                        <li>Enter your MPesa phone number below</li>
+                        <li>Click "Pay Now with MPesa"</li>
+                        <li>Wait for the STK push notification on your phone</li>
+                        <li>Enter your MPesa PIN to complete payment</li>
+                        <li>You'll receive a confirmation SMS and receipt</li>
+                    </ol>
+                    <div class="alert alert-info mt-3 mb-0">
+                        <i class="fas fa-mobile-alt me-2"></i>
+                        Make sure your phone is connected to receive the STK push notification.
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Payment Form -->
+        <div class="col-lg-4">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-money-bill-wave me-2"></i>Payment Details
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if not order %}
+                    <form method="post" id="paymentForm">
                         {% csrf_token %}
+                        
                         <div class="mb-3">
-                            <label for="phone_number" class="form-label">Phone Number (for M-Pesa)</label>
-                            <input type="text" name="phone_number" id="phone_number" class="form-control" required>
+                            <label for="phone_number" class="form-label">
+                                <i class="fas fa-phone me-1"></i>MPesa Phone Number
+                            </label>
+                            <div class="input-group">
+                                <span class="input-group-text">+254</span>
+                                <input type="tel" name="phone_number" id="phone_number" 
+                                       class="form-control" placeholder="7XX XXX XXX" 
+                                       pattern="[0-9]{9}" required>
+                            </div>
+                            <div class="form-text">Enter the phone number registered with MPesa</div>
                         </div>
 
-                        <button type="submit" name="action" value="pay_now" class="btn btn-success">
-                            💳 Pay Now
-                        </button>
+                        <div class="mb-3">
+                            <label class="form-label">
+                                <i class="fas fa-receipt me-1"></i>Order Total
+                            </label>
+                            <div class="h3 text-success">KES {{ total|floatformat:2 }}</div>
+                        </div>
 
-                        <button type="submit" name="action" value="pay_later" class="btn btn-secondary">
-                            🧾 Pay Later
+                        <button type="submit" name="action" value="pay_now" 
+                                class="btn btn-success btn-lg w-100"
+                                onclick="showLoading('Initiating payment...')">
+                            <i class="fas fa-mobile-alt me-2"></i>Pay Now with MPesa
                         </button>
+                        
+                        <div class="text-center mt-3">
+                            <img src="https://via.placeholder.com/200x50?text=Powered+by+MPesa" 
+                                 alt="MPesa" class="img-fluid" style="max-width: 150px;">
+                        </div>
                     </form>
-            {% endif %}
+                    
+                    {% else %}
+                    <!-- Order Created - Show Payment Status -->
+                    <div class="text-center">
+                        <div class="mb-3">
+                            {% if order.status == "PAID" %}
+                                <i class="fas fa-check-circle text-success" style="font-size: 4rem;"></i>
+                            {% elif order.status == "PENDING" %}
+                                <i class="fas fa-clock text-warning" style="font-size: 4rem;"></i>
+                            {% else %}
+                                <i class="fas fa-times-circle text-danger" style="font-size: 4rem;"></i>
+                            {% endif %}
+                        </div>
+                        
+                        <h5>Order #{{ order.id }}</h5>
+                        <p>
+                            Status: 
+                            <span id="order-status">
+                                {% if order.status == "PAID" %}
+                                    <span class="badge bg-success">Paid</span>
+                                {% elif order.status == "PENDING" %}
+                                    <span class="badge bg-warning text-dark">Pending Payment</span>
+                                {% else %}
+                                    <span class="badge bg-danger">{{ order.status }}</span>
+                                {% endif %}
+                            </span>
+                        </p>
+                        
+                        <!-- QR Code for verification -->
+                        <div class="my-3">
+                            {% qr_from_text request.build_absolute_uri|slice:":-10"|add:order.id|add:"/order/verify/"|add:order.id|stringformat:"s" size="L" image_format="png" %}
+                            <p class="small text-muted mt-2">
+                                <i class="fas fa-qrcode me-1"></i>Scan to verify order
+                            </p>
+                        </div>
+                        
+                        {% if order.status == "PENDING" %}
+                        <div class="d-grid gap-2">
+                            <button id="refresh-btn" class="btn btn-primary" onclick="checkPaymentStatus()">
+                                <i class="fas fa-sync-alt me-1"></i>Refresh Status
+                            </button>
+                            <a href="{% url 'product:checkout' %}" class="btn btn-outline-secondary">
+                                <i class="fas fa-edit me-1"></i>Modify Order
+                            </a>
+                        </div>
+                        {% endif %}
+                        
+                        <div class="mt-3">
+                            <a href="{% url 'receipt_pdf' order.id %}" class="btn btn-danger">
+                                <i class="fas fa-file-pdf me-1"></i>Download Receipt
+                            </a>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
 
-
-    <!-- If order exists, show receipt info -->
-    {% if order %}
-    <hr class="my-4">
-    <h2 class="mb-3">🧾 Receipt for Order #{{ order.id }}</h2>
-    <p><b>Status:</b>
-        <span id="order-status">
-            {% if order.status == "PAID" %}
-                <span class="badge bg-success">Paid</span>
-            {% elif order.status == "PENDING" %}
-                <span class="badge bg-warning text-dark">Pending</span>
-            {% else %}
-                <span class="badge bg-danger">Cancelled</span>
-            {% endif %}
-        </span>
-    </p>
-
-    <div class="text-end mb-3">
-        {% qr_from_text request.build_absolute_uri|cut:request.get_full_path|add:"order/verify/"|add:order.id|stringformat:"s" size="L" image_format="png" %}
-        <p class="small mt-2">📱 Scan to verify this order</p>
+            <!-- Security Info -->
+            <div class="card mt-3">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <i class="fas fa-shield-alt text-success me-3" style="font-size: 2rem;"></i>
+                        <div>
+                            <strong>Secure Payment</strong>
+                            <p class="small text-muted mb-0">Your payment is processed securely through MPesa</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
-
-    <div class="mt-3 d-flex gap-2">
-        <a href="{% url 'receipt_pdf' order.id %}" class="btn btn-danger">📝 Download PDF</a>
-        <button id="refresh-btn" class="btn btn-primary">🔄 Refresh Now</button>
-    </div>
-
-    <script>
-        function checkPaymentStatus() {
-            fetch("{% url 'check_payment_status' order.id %}")
-                .then(response => response.json())
-                .then(data => {
-                    if (data.status === "PAID") {
-                        document.getElementById("order-status").innerHTML =
-                            '<span class="badge bg-success">Paid</span>';
-                        document.getElementById("refresh-btn").style.display = "none";
-                    }
-                });
-        }
-        document.getElementById("refresh-btn").addEventListener("click", checkPaymentStatus);
-        setInterval(checkPaymentStatus, 5000);
-    </script>
-    {% endif %}
 </div>
+
+<script>
+function checkPaymentStatus() {
+    showLoading('Checking payment status...');
+    
+    fetch("{% url 'check_payment_status' order.id %}")
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === "PAID") {
+                document.getElementById('order-status').innerHTML = 
+                    '<span class="badge bg-success">Paid</span>';
+                showToast('success', 'Payment successful! Redirecting...');
+                setTimeout(() => {
+                    window.location.href = "{% url 'receipt' order.id %}";
+                }, 2000);
+            } else {
+                document.getElementById('order-status').innerHTML = 
+                    '<span class="badge bg-warning text-dark">' + data.status + '</span>';
+                showToast('info', 'Payment still pending. Please complete the payment on your phone.');
+            }
+            hideLoading();
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showToast('error', 'Error checking payment status');
+            hideLoading();
+        });
+}
+
+// Auto-refresh every 10 seconds if order is pending
+{% if order and order.status == "PENDING" %}
+setInterval(checkPaymentStatus, 10000);
+{% endif %}
+
+{% if not order %}
+// Phone number validation
+document.getElementById('paymentForm').addEventListener('submit', function(e) {
+    const phone = document.getElementById('phone_number').value;
+    if (phone.length !== 9) {
+        e.preventDefault();
+        showToast('error', 'Please enter a valid 9-digit phone number');
+        return false;
+    }
+    return true;
+});
+{% endif %}
+</script>
 {% endblock %}
+

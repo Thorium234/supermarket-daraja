@@ -1,4 +1,3 @@
-# product/urls.py
 from django.urls import path
 from . import views
 
@@ -10,6 +9,7 @@ urlpatterns = [
 
     # ---------------- Cart ---------------- #
     path("cart/", views.cart_view, name="cart"),
+    path("cart/count/", views.cart_count_ajax, name="cart_count_ajax"),
     path("cart/add/<int:pk>/", views.add_to_cart, name="add_to_cart"),
     path("cart/remove/<int:pk>/", views.remove_from_cart, name="remove_from_cart"),
     path("cart/update/<int:pk>/", views.update_cart, name="update_cart"),
@@ -25,6 +25,8 @@ urlpatterns = [
     path("receipt/<int:order_id>/", views.receipt, name="receipt"),
     path("receipt/<int:order_id>/pdf/", views.receipt_pdf, name="receipt_pdf"),
     path("receipt-view/<int:order_id>/", views.receipt_view, name="receipt_view"),
+    path("receipt/<int:order_id>/send-sms/", views.send_receipt_sms, name="send_receipt_sms"),
+    path("receipt/<int:order_id>/verify/", views.verify_order, name="receipt_verify"),
 
     # ---------------- Admin / Cashier ---------------- #
     path("dashboard/", views.dashboard, name="dashboard"),
@@ -38,10 +40,5 @@ urlpatterns = [
     # Reports & Graphs
     path("dashboard/export/excel/", views.export_excel, name="export_excel"),
     path("dashboard/sales-graph/", views.sales_graph, name="sales_graph"),
-    path('receipt/<int:order_id>/pdf/', views.receipt_pdf, name='receipt_pdf'),
-
-    path("receipt/<int:order_id>/", views.receipt, name="receipt"),
-    path("check-payment-status/<int:order_id>/", views.check_payment_status, name="check_payment_status"),
-
-
 ]
+
