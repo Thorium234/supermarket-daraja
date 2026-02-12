@@ -23,6 +23,10 @@
                 <input type="number" class="form-control" name="stock" value="{{ product.stock|default:'' }}" required>
             </div>
             <div class="col-md-4">
+                <label class="form-label">Discount (%)</label>
+                <input type="number" min="0" max="90" class="form-control" name="discount_percentage" value="{{ product.discount_percentage|default:0 }}">
+            </div>
+            <div class="col-md-4">
                 <label class="form-label">Category/Shelf</label>
                 <select name="shelf" class="form-select">
                     <option value="">No category</option>
@@ -52,6 +56,12 @@
                     <img src="{{ product.image.url }}" alt="{{ product.name }}" style="width: 90px; height: 90px; object-fit: cover; border-radius: 10px;">
                 </div>
                 {% endif %}
+            </div>
+            <div class="col-12">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" name="is_active" id="id_is_active" {% if not product or product.is_active %}checked{% endif %}>
+                    <label class="form-check-label" for="id_is_active">Active for storefront</label>
+                </div>
             </div>
         </div>
 

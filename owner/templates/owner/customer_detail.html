@@ -1,0 +1,24 @@
+{% extends "owner/base.html" %}
+
+{% block owner_content %}
+<h3 class="mb-3">Customer: {{ customer.name|default:customer.phone_number }}</h3>
+<div class="card shadow-sm mb-3"><div class="card-body"><p class="mb-1"><strong>Phone:</strong> {{ customer.phone_number }}</p><p class="mb-0"><strong>Email:</strong> {{ customer.email|default:'-' }}</p></div></div>
+<div class="card shadow-sm table-responsive">
+    <table class="table mb-0">
+        <thead><tr><th>Order</th><th>Status</th><th>Total</th><th>Date</th><th></th></tr></thead>
+        <tbody>
+            {% for order in orders %}
+            <tr>
+                <td>#{{ order.id }}</td>
+                <td>{{ order.status }}</td>
+                <td>KES {{ order.total_price|floatformat:2 }}</td>
+                <td>{{ order.created_at|date:"Y-m-d H:i" }}</td>
+                <td><a href="{% url 'owner:order_detail' order.id %}" class="btn btn-sm btn-outline-primary">View</a></td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="5" class="text-center py-4">No orders yet.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

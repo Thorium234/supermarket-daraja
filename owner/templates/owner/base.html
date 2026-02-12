@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row g-4 owner-shell">
+    <div class="col-lg-3 col-xl-2">
+        <div class="card shadow-sm sticky-top" style="top: 90px;">
+            <div class="card-body p-3">
+                <h6 class="text-uppercase text-muted mb-3">Owner Center</h6>
+                <div class="list-group list-group-flush">
+                    <a href="{% url 'owner:dashboard' %}" class="list-group-item list-group-item-action">Overview</a>
+                    <a href="{% url 'owner:product_list' %}" class="list-group-item list-group-item-action">Products</a>
+                    <a href="{% url 'owner:category_list' %}" class="list-group-item list-group-item-action">Categories</a>
+                    <a href="{% url 'owner:order_list' %}" class="list-group-item list-group-item-action">Orders</a>
+                    <a href="{% url 'owner:customer_list' %}" class="list-group-item list-group-item-action">Customers</a>
+                    <a href="{% url 'owner:review_list' %}" class="list-group-item list-group-item-action">Reviews</a>
+                    <a href="{% url 'owner:analytics' %}" class="list-group-item list-group-item-action">Analytics</a>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-9 col-xl-10">
+        {% block owner_content %}{% endblock %}
+    </div>
+</div>
+{% endblock %}

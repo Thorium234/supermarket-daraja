@@ -1,0 +1,48 @@
+{% extends "owner/base.html" %}
+
+{% block owner_content %}
+<h3 class="mb-3">Analytics</h3>
+<div class="row g-3 mb-4">
+    <div class="col-lg-6"><div class="card shadow-sm"><div class="card-header">Top Products</div><div class="card-body"><canvas id="topProductsChart" height="220"></canvas></div></div></div>
+    <div class="col-lg-6"><div class="card shadow-sm"><div class="card-header">Revenue by Category</div><div class="card-body"><canvas id="categoryRevenueChart" height="220"></canvas></div></div></div>
+</div>
+
+<div class="row g-3">
+    <div class="col-lg-6">
+        <div class="card shadow-sm"><div class="card-header">Top Selling Products Table</div>
+            <table class="table mb-0"><thead><tr><th>Product</th><th>Units</th></tr></thead><tbody>
+                {% for row in top_products_table %}<tr><td>{{ row.name }}</td><td>{{ row.total_sold }}</td></tr>{% endfor %}
+            </tbody></table>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="card shadow-sm"><div class="card-header">Revenue Per Category</div>
+            <table class="table mb-0"><thead><tr><th>Category</th><th>Revenue</th></tr></thead><tbody>
+                {% for row in revenue_category_table %}<tr><td>{{ row.category }}</td><td>KES {{ row.revenue|floatformat:2 }}</td></tr>{% endfor %}
+            </tbody></table>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+const topProducts = JSON.parse('{{ top_products|escapejs }}');
+const byCategory = JSON.parse('{{ by_category|escapejs }}');
+
+new Chart(document.getElementById('topProductsChart'), {
+  type: 'bar',
+  data: {
+    labels: topProducts.map(item => item.name),
+    datasets: [{label: 'Units Sold', data: topProducts.map(item => item.total_sold), backgroundColor: '#0d6efd'}]
+  }
+});
+
+new Chart(document.getElementById('categoryRevenueChart'), {
+  type: 'bar',
+  data: {
+    labels: byCategory.map(item => item.category),
+    datasets: [{label: 'Revenue', data: byCategory.map(item => item.revenue), backgroundColor: '#198754'}]
+  }
+});
+</script>
+{% endblock %}

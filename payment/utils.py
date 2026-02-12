@@ -1,22 +1,27 @@
-# payment/utils.py
 from django.db import transaction
-from .models import StockDeductionLog
+
+from .models import Payment, StockDeductionLog
+
+
+FINAL_ORDER_STATES = {"PAID", "SHIPPED", "DELIVERED", "REFUNDED", "CANCELLED", "FAILED"}
 
 
 def apply_stock_deduction(order, payment=None, user=None, source=StockDeductionLog.AUTO):
-    """
-    Deduct stock for all items in the order and log it.
-    Idempotent: will not double-deduct if already logged.
-    Returns True if deduction applied, False otherwise.
-    """
-    if StockDeductionLog.objects.filter(order=order, payment=payment, source=source, action=StockDeductionLog.DEDUCT).exists():
-        return False  # already deducted
+    """Deduct stock once for an order and log per item entries."""
+    if StockDeductionLog.objects.filter(
+        order=order,
+        payment=payment,
+        action=StockDeductionLog.DEDUCT,
+    ).exists():
+        return False
 
     with transaction.atomic():
-        for item in order.items.all():
+        for item in order.items.select_related("product"):
             product = item.product
-            product.stock = max(product.stock - item.quantity, 0)
-            product.save()
+            if product.stock < item.quantity:
+                raise ValueError(f"Insufficient stock for {product.name}")
+            product.stock -= item.quantity
+            product.save(update_fields=["stock"])
 
             StockDeductionLog.objects.create(
                 order=order,
@@ -26,29 +31,25 @@ def apply_stock_deduction(order, payment=None, user=None, source=StockDeductionL
                 action=StockDeductionLog.DEDUCT,
                 source=source,
                 deducted_by=user,
-                notes=f"Deducted {item.quantity} × {product.name} for order {order.id}",
             )
-
-        order.status = "STOCK_DEDUCTED"
-        order.save(update_fields=["status"])
 
     return True
 
 
-def rollback_stock_deduction(order, payment=None, user=None, notes=""):
-    """
-    Restore stock for an order and log the rollback.
-    Idempotent: will not rollback twice.
-    Returns True if rollback applied, False otherwise.
-    """
-    if StockDeductionLog.objects.filter(order=order, payment=payment, source=StockDeductionLog.ROLLBACK, action=StockDeductionLog.ROLLBACK).exists():
-        return False  # already rolled back
+def rollback_stock_deduction(order, payment=None, user=None):
+    """Restore stock once for an order and log rollback entries."""
+    if StockDeductionLog.objects.filter(
+        order=order,
+        payment=payment,
+        action=StockDeductionLog.ROLLBACK,
+    ).exists():
+        return False
 
     with transaction.atomic():
-        for item in order.items.all():
+        for item in order.items.select_related("product"):
             product = item.product
             product.stock += item.quantity
-            product.save()
+            product.save(update_fields=["stock"])
 
             StockDeductionLog.objects.create(
                 order=order,
@@ -58,46 +59,25 @@ def rollback_stock_deduction(order, payment=None, user=None, notes=""):
                 action=StockDeductionLog.ROLLBACK,
                 source=StockDeductionLog.MANUAL,
                 deducted_by=user,
-                notes=f"Rollback {item.quantity} × {product.name} for order {order.id}. {notes}",
             )
-
-        # keep PAID if no refund flow, otherwise admin will set REFUNDED
-        order.status = "PAID"
-        order.save(update_fields=["status"])
 
     return True
 
 
-def refund_order(payment, user=None, notes="Refund issued"):
-    """
-    Mark a payment as REFUNDED and rollback stock.
-    Returns (success, message).
-    """
+def refund_order(payment, user=None):
+    """Issue refund and rollback stock."""
     order = payment.order
+    if payment.status != Payment.STATUS_PAID:
+        return False, "Only paid payments can be refunded."
 
-    if payment.status != "SUCCESS":
-        return False, "Only successful payments can be refunded."
-
-    rollback_ok = rollback_stock_deduction(order, payment=payment, user=user, notes=notes)
+    rollback_ok = rollback_stock_deduction(order, payment=payment, user=user)
     if not rollback_ok:
-        return False, "Rollback already applied or not needed."
+        return False, "Rollback already applied."
 
     with transaction.atomic():
-        payment.status = "REFUNDED"
+        payment.status = Payment.STATUS_REFUNDED
         payment.save(update_fields=["status"])
-
         order.status = "REFUNDED"
         order.save(update_fields=["status"])
-
-        StockDeductionLog.objects.create(
-            order=order,
-            payment=payment,
-            product=None,   # not tied to a single product
-            quantity=0,     # aggregate
-            action=StockDeductionLog.ROLLBACK,
-            source=StockDeductionLog.MANUAL,
-            deducted_by=user,
-            notes=f"Refund issued: {notes}",
-        )
 
     return True, "Refund processed successfully."

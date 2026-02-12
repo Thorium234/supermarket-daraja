@@ -137,7 +137,9 @@ def product_create(request):
             image=request.FILES.get("image"),
             category=category,
             price=request.POST.get("price"),
+            discount_percentage=request.POST.get("discount_percentage") or 0,
             stock=request.POST.get("stock"),
+            is_active=bool(request.POST.get("is_active")),
             barcode=request.POST.get("barcode"),
             shelf=shelf,
         )
@@ -157,7 +159,9 @@ def product_edit(request, pk):
         product.name = request.POST.get("name")
         product.description = request.POST.get("description")
         product.price = request.POST.get("price")
+        product.discount_percentage = request.POST.get("discount_percentage") or 0
         product.stock = request.POST.get("stock")
+        product.is_active = bool(request.POST.get("is_active"))
         product.barcode = request.POST.get("barcode")
         if request.FILES.get("image"):
             product.image = request.FILES.get("image")
@@ -192,7 +196,7 @@ def product_list(request):
     stock_filter = request.GET.get("stock_filter")
     category = request.GET.get("category")
 
-    products = Product.objects.select_related("shelf").all().order_by("-created_at")
+    products = Product.objects.select_related("shelf", "category").filter(is_active=True).order_by("-created_at")
     
     if query:
         products = products.filter(
@@ -260,7 +264,7 @@ def cart_view(request):
     for product_id, item_data in cart.items():
         product = get_object_or_404(Product, id=product_id)
         quantity = item_data.get("quantity") if isinstance(item_data, dict) else int(item_data)
-        subtotal = product.price * quantity
+        subtotal = product.discounted_price * quantity
         items.append({"product": product, "quantity": quantity, "subtotal": subtotal})
         total += subtotal
 
@@ -277,9 +281,9 @@ def add_to_cart(request, pk):
         if isinstance(cart[pk_str], dict):
             cart[pk_str]["quantity"] += 1
         else:
-            cart[pk_str] = {"name": product.name, "price": float(product.price), "quantity": int(cart[pk_str]) + 1}
+            cart[pk_str] = {"name": product.name, "price": float(product.discounted_price), "quantity": int(cart[pk_str]) + 1}
     else:
-        cart[pk_str] = {"name": product.name, "price": float(product.price), "quantity": 1}
+        cart[pk_str] = {"name": product.name, "price": float(product.discounted_price), "quantity": 1}
 
     request.session["cart"] = cart
     request.session.modified = True
@@ -332,7 +336,7 @@ def checkout(request):
     for product_id, item_data in cart.items():
         product = get_object_or_404(Product, id=product_id)
         quantity = item_data.get("quantity") if isinstance(item_data, dict) else int(item_data)
-        subtotal = product.price * quantity
+        subtotal = product.discounted_price * quantity
         items.append({"product": product, "quantity": quantity, "subtotal": subtotal})
         total += subtotal
 
@@ -350,13 +354,19 @@ def checkout(request):
             return render(request, "product/checkout.html", {"items": items, "total": total, "order": order})
 
         action = request.POST.get("action")
-        customer, _ = Customer.objects.get_or_create(phone_number=phone_digits)
-        order = Order.objects.create(customer=customer, status="PENDING", total_price=total)
-
+        line_items = []
         for product_id, qty in cart.items():
             product = get_object_or_404(Product, id=product_id)
             quantity = qty["quantity"] if isinstance(qty, dict) else int(qty)
-            OrderItem.objects.create(order=order, product=product, quantity=quantity, price=product.price)
+            if product.stock < quantity:
+                messages.error(request, f"Insufficient stock for {product.name}.")
+                return render(request, "product/checkout.html", {"items": items, "total": total, "order": order})
+            line_items.append((product, quantity, product.discounted_price))
+
+        customer, _ = Customer.objects.get_or_create(phone_number=phone_digits)
+        order = Order.objects.create(customer=customer, status="PENDING", total_price=total)
+        for product, quantity, unit_price in line_items:
+            OrderItem.objects.create(order=order, product=product, quantity=quantity, price=unit_price)
 
         request.session["cart"] = {}
         request.session.modified = True
@@ -407,7 +417,7 @@ def dashboard(request):
 
     start_date = today if filter_option == "today" else today - timedelta(days=7 if filter_option == "week" else 30)
 
-    paid_orders = Order.objects.filter(status="PAID", created_at__date__gte=start_date)
+    paid_orders = Order.objects.filter(status__in=["PAID", "SHIPPED", "DELIVERED"], created_at__date__gte=start_date)
     pending_orders = Order.objects.filter(status="PENDING", created_at__date__gte=start_date)
     cancelled_orders = Order.objects.filter(status="CANCELLED", created_at__date__gte=start_date)
     failed_orders = Order.objects.filter(status="FAILED", created_at__date__gte=start_date)
@@ -421,7 +431,7 @@ def dashboard(request):
     refund_total = refunds.aggregate(total=Sum("amount"))["total"] or 0
     refund_ratio = (refund_total / total_sales * 100) if total_sales > 0 else 0
 
-    uncollected_orders = Order.objects.filter(status="PAID").exclude(payments__isnull=True)
+    uncollected_orders = Order.objects.filter(status__in=["PAID", "SHIPPED"]).exclude(payments__isnull=True)
 
     low_stock_products = Product.objects.filter(stock__lte=5)
     recent_orders = Order.objects.filter(created_at__date__gte=start_date).order_by("-created_at")[:10]
@@ -435,13 +445,13 @@ def dashboard(request):
     }
 
     sales_trends = [{"date": (today - timedelta(days=i)).strftime("%Y-%m-%d"),
-                     "sales": Order.objects.filter(status="PAID", created_at__date=today - timedelta(days=i))
+                     "sales": Order.objects.filter(status__in=["PAID", "SHIPPED", "DELIVERED"], created_at__date=today - timedelta(days=i))
                      .aggregate(total=Sum("total_price"))["total"] or 0} for i in range(7)][::-1]
 
     refunds_trends = [{"date": (today - timedelta(days=i)).strftime("%Y-%m-%d"),
                        "refunds": Payment.objects.filter(status="REFUNDED", transaction_date__date=today - timedelta(days=i)).count()} for i in range(7)][::-1]
 
-    top_products = (OrderItem.objects.filter(order__status="PAID", order__created_at__date__gte=start_date)
+    top_products = (OrderItem.objects.filter(order__status__in=["PAID", "SHIPPED", "DELIVERED"], order__created_at__date__gte=start_date)
                     .values("product__name", "product__shelf__name")
                     .annotate(total_sold=Sum("quantity")).order_by("-total_sold")[:5])
     top_products_data = {f"{item['product__name']} ({item['product__shelf__name']})": item["total_sold"] for item in top_products}
@@ -696,7 +706,7 @@ def update_cart(request, pk):
             for product_id, item_data in cart.items():
                 product = get_object_or_404(Product, id=product_id)
                 quantity = item_data.get("quantity") if isinstance(item_data, dict) else int(item_data)
-                subtotal = product.price * quantity
+                subtotal = product.discounted_price * quantity
                 cart_items.append({"product_id": int(product_id), "subtotal": float(subtotal)})
                 total += subtotal
 

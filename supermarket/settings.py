@@ -17,7 +17,11 @@ SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", 'django-insecure-6735otn9px40kr
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get("DJANGO_DEBUG", "True").lower() == "true"
 
-ALLOWED_HOSTS = [host.strip() for host in os.environ.get("DJANGO_ALLOWED_HOSTS", "127.0.0.1,localhost,6d74e7172178.ngrok-free.app,*").split(",") if host.strip()]
+ALLOWED_HOSTS = [
+    host.strip()
+    for host in os.environ.get("DJANGO_ALLOWED_HOSTS", "127.0.0.1,localhost").split(",")
+    if host.strip()
+]
 
 
 # Application definition
@@ -33,6 +37,7 @@ INSTALLED_APPS = [
     'django_daraja',
     'payment',
     'product',
+    'owner',
     # 'supermarket.common.apps.CommonConfig',
     ]
 
@@ -211,3 +216,7 @@ CELERY_TIMEZONE = "Africa/Nairobi"
 SESSION_COOKIE_HTTPONLY = True
 CSRF_COOKIE_HTTPONLY = True
 X_FRAME_OPTIONS = "DENY"
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
+SECURE_BROWSER_XSS_FILTER = True
+SECURE_CONTENT_TYPE_NOSNIFF = True

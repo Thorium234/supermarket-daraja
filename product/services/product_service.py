@@ -35,6 +35,8 @@ class ProductCatalogService:
                     "name": product.name,
                     "description": product.description,
                     "price": float(product.price),
+                    "discount_percentage": int(product.discount_percentage or 0),
+                    "discounted_price": float(product.discounted_price),
                     "stock": product.stock,
                     "barcode": product.barcode,
                     "category": product.category.name if product.category else None,

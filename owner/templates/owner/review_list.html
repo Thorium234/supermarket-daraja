@@ -1,0 +1,40 @@
+{% extends "owner/base.html" %}
+
+{% block owner_content %}
+<h3 class="mb-3">Review Moderation</h3>
+<form method="get" class="row g-2 mb-3">
+    <div class="col-md-5">
+        <select class="form-select" name="product" onchange="this.form.submit()">
+            <option value="">All products</option>
+            {% for p in products %}
+            <option value="{{ p.id }}" {% if selected_product == p.id|stringformat:'s' %}selected{% endif %}>{{ p.name }}</option>
+            {% endfor %}
+        </select>
+    </div>
+</form>
+
+<div class="card shadow-sm table-responsive">
+<table class="table mb-0 align-middle">
+    <thead><tr><th>Product</th><th>Customer</th><th>Rating</th><th>Comment</th><th>Date</th><th></th></tr></thead>
+    <tbody>
+        {% for review in reviews %}
+        <tr>
+            <td>{{ review.product.name }}</td>
+            <td>{{ review.customer.phone_number }}</td>
+            <td>{{ review.rating }}/5</td>
+            <td>{{ review.comment|default:'-' }}</td>
+            <td>{{ review.created_at|date:"Y-m-d H:i" }}</td>
+            <td class="text-end">
+                <form method="post" action="{% url 'owner:review_delete' review.id %}">
+                    {% csrf_token %}
+                    <button class="btn btn-sm btn-outline-danger" onclick="return confirm('Delete this review?');">Delete</button>
+                </form>
+            </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="6" class="text-center py-4">No reviews found.</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+</div>
+{% endblock %}

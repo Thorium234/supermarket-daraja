@@ -1,0 +1,28 @@
+{% extends "owner/base.html" %}
+
+{% block owner_content %}
+<h3 class="mb-3">Customer Management</h3>
+<form method="get" class="row g-2 mb-3">
+    <div class="col-md-5"><input class="form-control" type="search" name="q" value="{{ query }}" placeholder="Search by phone"></div>
+    <div class="col-md-2"><button class="btn btn-outline-primary w-100">Search</button></div>
+</form>
+
+<div class="card shadow-sm table-responsive">
+<table class="table mb-0 align-middle">
+    <thead><tr><th>Name</th><th>Phone</th><th>Email</th><th>Orders</th><th></th></tr></thead>
+    <tbody>
+        {% for customer in customers %}
+        <tr>
+            <td>{{ customer.name|default:'-' }}</td>
+            <td>{{ customer.phone_number }}</td>
+            <td>{{ customer.email|default:'-' }}</td>
+            <td>{{ customer.total_orders }}</td>
+            <td class="text-end"><a href="{% url 'owner:customer_detail' customer.id %}" class="btn btn-sm btn-outline-primary">Open</a></td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="5" class="text-center py-4">No customers found.</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+</div>
+{% endblock %}

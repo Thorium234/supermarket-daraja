@@ -1,4 +1,5 @@
 from django.http import JsonResponse
+from django.conf import settings
 
 
 class ApiExceptionMiddleware:
@@ -24,5 +25,8 @@ class ApiExceptionMiddleware:
             return response
         except Exception as exc:
             if request.path.startswith("/api/"):
-                return JsonResponse({"ok": False, "message": "Internal server error", "detail": str(exc)}, status=500)
+                payload = {"ok": False, "message": "Internal server error"}
+                if settings.DEBUG:
+                    payload["detail"] = str(exc)
+                return JsonResponse(payload, status=500)
             raise

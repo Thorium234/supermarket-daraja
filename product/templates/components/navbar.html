@@ -25,12 +25,13 @@
                 {% if user.is_staff %}
                 <li class="nav-item dropdown">
                     <a class="nav-link dropdown-toggle {% if 'dashboard' in request.resolver_match.url_name %}active{% endif %}" href="#" role="button" data-bs-toggle="dropdown">
-                        <i class="fas fa-tachometer-alt me-1"></i> Dashboard
+                        <i class="fas fa-tachometer-alt me-1"></i> Owner Center
                     </a>
                     <ul class="dropdown-menu">
-                        <li><a class="dropdown-item" href="{% url 'product:dashboard' %}"><i class="fas fa-chart-line me-2"></i>Overview</a></li>
-                        <li><a class="dropdown-item" href="{% url 'product:product_list_admin' %}"><i class="fas fa-boxes me-2"></i>Products</a></li>
-                        <li><a class="dropdown-item" href="{% url 'product:export_excel' %}"><i class="fas fa-file-excel me-2"></i>Export Report</a></li>
+                        <li><a class="dropdown-item" href="{% url 'owner:dashboard' %}"><i class="fas fa-chart-line me-2"></i>Overview</a></li>
+                        <li><a class="dropdown-item" href="{% url 'owner:product_list' %}"><i class="fas fa-boxes me-2"></i>Products</a></li>
+                        <li><a class="dropdown-item" href="{% url 'owner:order_list' %}"><i class="fas fa-shopping-bag me-2"></i>Orders</a></li>
+                        <li><a class="dropdown-item" href="{% url 'owner:analytics' %}"><i class="fas fa-chart-pie me-2"></i>Analytics</a></li>
                     </ul>
                 </li>
                 {% elif user.is_authenticated %}

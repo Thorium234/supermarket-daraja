@@ -10,6 +10,7 @@ from supermarket.core.rate_limit import rate_limit
 from product.forms import CustomerRegistrationForm
 from product.models import Product, Customer, Order, OrderItem, ProductReview, Category
 from product.services.product_service import ProductCatalogService
+from product.serializers import serialize_review
 
 
 @csrf_exempt
@@ -141,22 +142,15 @@ def product_detail_api(request, product_id):
     image_url = product.image.url if product.image else None
 
     reviews_qs = product.reviews.select_related("customer").all()[:20]
-    reviews = [
-        {
-            "id": review.id,
-            "rating": review.rating,
-            "comment": review.comment,
-            "customer": review.customer.name or review.customer.phone_number,
-            "created_at": review.created_at.isoformat(),
-        }
-        for review in reviews_qs
-    ]
+    reviews = [serialize_review(review) for review in reviews_qs]
 
     payload = {
         "id": product.id,
         "name": product.name,
         "description": product.description,
         "price": float(product.price),
+        "discount_percentage": int(product.discount_percentage or 0),
+        "discounted_price": float(product.discounted_price),
         "stock": product.stock,
         "barcode": product.barcode,
         "category": product.category.name if product.category else None,
@@ -201,9 +195,9 @@ def order_create_api(request):
         if product.stock < quantity:
             return api_error(f"Insufficient stock for {product.name}", status=409)
 
-        subtotal = product.price * quantity
+        subtotal = product.discounted_price * quantity
         total += subtotal
-        order_items.append((product, quantity, product.price))
+        order_items.append((product, quantity, product.discounted_price))
 
     with transaction.atomic():
         order = Order.objects.create(customer=customer, total_price=total, status="PENDING")
@@ -284,11 +278,12 @@ def admin_product_create_api(request):
     try:
         price = float(payload.get("price", 0))
         stock = int(payload.get("stock", 0))
+        discount_percentage = int(payload.get("discount_percentage", 0))
     except ValueError:
         return api_error("Invalid price or stock", status=400)
 
-    if price < 0 or stock < 0:
-        return api_error("Price and stock must be non-negative", status=400)
+    if price < 0 or stock < 0 or discount_percentage < 0 or discount_percentage > 90:
+        return api_error("Price/stock must be non-negative and discount must be 0-90", status=400)
 
     category = None
     category_slug = payload.get("category")
@@ -300,6 +295,8 @@ def admin_product_create_api(request):
         description=(payload.get("description") or "").strip(),
         price=price,
         stock=stock,
+        discount_percentage=discount_percentage,
+        is_active=bool(payload.get("is_active", True)),
         barcode=(payload.get("barcode") or None),
         category=category,
     )

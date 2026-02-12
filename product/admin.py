@@ -1,7 +1,18 @@
 # product/admin.py
 from django.contrib import admin
 from django.utils.html import format_html
-from .models import Shelf, Category, Product, Customer, Order, OrderItem, VerificationLog, ProductReview
+from .models import (
+    Shelf,
+    Category,
+    Product,
+    Customer,
+    Order,
+    OrderItem,
+    VerificationLog,
+    ProductReview,
+    Cart,
+    CartItem,
+)
 
 
 @admin.register(Shelf)
@@ -21,9 +32,20 @@ class CategoryAdmin(admin.ModelAdmin):
 
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
-    list_display = ("image_preview", "name", "category", "price", "stock", "shelf", "barcode", "created_at")
+    list_display = (
+        "image_preview",
+        "name",
+        "category",
+        "price",
+        "discount_percentage",
+        "stock",
+        "is_active",
+        "shelf",
+        "barcode",
+        "created_at",
+    )
     search_fields = ("name", "barcode", "shelf__name", "category__name")
-    list_filter = ("created_at", "shelf", "category")
+    list_filter = ("created_at", "shelf", "category", "is_active")
     autocomplete_fields = ("shelf", "category")
 
     def image_preview(self, obj):
@@ -68,6 +90,20 @@ class ProductReviewAdmin(admin.ModelAdmin):
     search_fields = ("product__name", "customer__phone_number", "comment")
 
 
+@admin.register(Cart)
+class CartAdmin(admin.ModelAdmin):
+    list_display = ("id", "customer", "updated_at")
+    search_fields = ("customer__phone_number", "customer__name")
+    list_filter = ("updated_at",)
+
+
+@admin.register(CartItem)
+class CartItemAdmin(admin.ModelAdmin):
+    list_display = ("cart", "product", "quantity", "created_at")
+    search_fields = ("cart__customer__phone_number", "product__name")
+    list_filter = ("created_at",)
+
+
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 from django.contrib.auth.models import User, Group
@@ -84,10 +120,3 @@ class CustomUserAdmin(UserAdmin):
     def get_roles(self, obj):
         return ", ".join([g.name for g in obj.groups.all()])
     get_roles.short_description = "Roles (Groups)"
-
-# Make sure groups (Cashier / Owner) exist
-def ensure_default_groups():
-    for group_name in ["Cashier", "Owner"]:
-        Group.objects.get_or_create(name=group_name)
-
-ensure_default_groups()

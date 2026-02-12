@@ -21,43 +21,6 @@ logger = logging.getLogger(__name__)
 cl = MpesaClient()
 
 
-# ---------------- Utility: Idempotent Stock Deduction ---------------- #
-def _apply_stock_deduction(order, payment, source=StockDeductionLog.AUTO, user=None):
-    """
-    Deduct stock for all items in the order — idempotent.
-    Will NOT deduct again if already deducted for this payment.
-    """
-    if StockDeductionLog.objects.filter(
-        order=order, payment=payment, action=StockDeductionLog.DEDUCT
-    ).exists():
-        logger.info(
-            "Stock deduction skipped (already done) for order %s, payment %s",
-            order.id,
-            payment.id,
-        )
-        return False
-
-    for item in order.items.all():
-        product = item.product
-        if product.stock < item.quantity:
-            raise ValueError(f"Insufficient stock for {product.name}")
-        product.stock -= item.quantity
-        product.save()
-
-        StockDeductionLog.objects.create(
-            order=order,
-            payment=payment,
-            product=product,
-            quantity=item.quantity,
-            action=StockDeductionLog.DEDUCT,
-            source=source,
-            deducted_by=user,
-        )
-
-    logger.info("✅ Stock deduction applied for order %s, payment %s", order.id, payment.id)
-    return True
-
-
 # ---------------- Payment Initiation ---------------- #
 from django.views.decorators.http import require_POST
 
@@ -126,8 +89,8 @@ def payment_status(request, order_id):
 
     payment_status_value = payment.status if payment else "NOT_FOUND"
     order_status_value = order.status
-    is_paid = payment_status_value == Payment.STATUS_PAID or order_status_value == "PAID"
-    is_failed = payment_status_value == Payment.STATUS_FAILED or order_status_value in ("FAILED", "CANCELLED")
+    is_paid = payment_status_value == Payment.STATUS_PAID or order_status_value in ("PAID", "SHIPPED", "DELIVERED")
+    is_failed = payment_status_value == Payment.STATUS_FAILED or order_status_value in ("FAILED", "CANCELLED", "REFUNDED")
 
     return JsonResponse(
         {
@@ -194,10 +157,7 @@ def stk_push_callback(request):
         )
 
     # ⏳ Idempotency check
-    if payment.status == Payment.STATUS_PAID and order.status in (
-        "PAID",
-        "STOCK_DEDUCTED",
-    ):
+    if payment.status == Payment.STATUS_PAID and order.status in ("PAID", "SHIPPED", "DELIVERED"):
         logger.info("Duplicate STK callback ignored: order %s already processed", order.id)
         return JsonResponse({"ResultCode": 0, "ResultDesc": "Already processed"})
 
@@ -210,7 +170,7 @@ def stk_push_callback(request):
                 payment.transaction_date = timezone.now()
                 payment.save()
 
-                if order.status not in ("PAID", "STOCK_DEDUCTED"):
+                if order.status not in ("PAID", "SHIPPED", "DELIVERED"):
                     order.status = "PAID"
                     order.save(update_fields=["status"])
 
@@ -222,11 +182,12 @@ def stk_push_callback(request):
 
                 # 📩 Queue confirmation (email + SMS) via Celery
                 subject = f"Payment Confirmation for Order #{order.id}"
+                amount_value = amount or order.total_price
                 message = (
                     f"Dear Customer,\n\n"
-                    f"We have received your payment of KES {amount:.2f} for Order #{order.id}.\n"
+                    f"We have received your payment of KES {amount_value:.2f} for Order #{order.id}.\n"
                     f"Mpesa Receipt: {mpesa_receipt}\n"
-                    f"Status: PAID ✅\n\n"
+                    f"Status: PAID.\n\n"
                     f"Thank you for shopping with us!"
                 )
 
