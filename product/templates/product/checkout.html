@@ -2,9 +2,9 @@
 {% load qr_code %}
 
 {% block content %}
-<div class="container">
+<div class="container checkout-shell">
     <!-- Page Header -->
-    <div class="text-center mb-4">
+    <div class="text-center mb-4 checkout-heading">
         <h2>
             <i class="fas fa-credit-card me-2 text-success"></i>🛒 Checkout
         </h2>
@@ -30,7 +30,7 @@
     <div class="row">
         <!-- Order Summary -->
         <div class="col-lg-8">
-            <div class="card">
+            <div class="card checkout-card-elevated">
                 <div class="card-header bg-white">
                     <h5 class="mb-0">
                         <i class="fas fa-list me-2"></i>Order Items ({{ items|length }})
@@ -81,7 +81,7 @@
             </div>
 
             <!-- Payment Instructions -->
-            <div class="card mt-4">
+            <div class="card mt-4 checkout-card-elevated">
                 <div class="card-header bg-info text-white">
                     <h5 class="mb-0">
                         <i class="fas fa-info-circle me-2"></i>How to Pay
@@ -105,7 +105,7 @@
 
         <!-- Payment Form -->
         <div class="col-lg-4">
-            <div class="card">
+            <div class="card checkout-card-elevated">
                 <div class="card-header bg-success text-white">
                     <h5 class="mb-0">
                         <i class="fas fa-money-bill-wave me-2"></i>Payment Details
@@ -189,7 +189,7 @@
                             <button id="refresh-btn" class="btn btn-primary" onclick="checkPaymentStatus()">
                                 <i class="fas fa-sync-alt me-1"></i>Refresh Status
                             </button>
-                            <a href="{% url 'product:checkout' %}" class="btn btn-outline-secondary">
+                            <a href="{% url 'product:checkout' %}?order_id={{ order.id }}" class="btn btn-outline-secondary">
                                 <i class="fas fa-edit me-1"></i>Modify Order
                             </a>
                         </div>
@@ -206,7 +206,7 @@
             </div>
 
             <!-- Security Info -->
-            <div class="card mt-3">
+            <div class="card mt-3 checkout-card-elevated">
                 <div class="card-body">
                     <div class="d-flex align-items-center">
                         <i class="fas fa-shield-alt text-success me-3" style="font-size: 2rem;"></i>
@@ -223,6 +223,8 @@
 
 <script>
 {% if order %}
+let pendingToastShown = false;
+
 function checkPaymentStatus() {
     showLoading('Checking payment status...');
     
@@ -239,7 +241,10 @@ function checkPaymentStatus() {
             } else {
                 document.getElementById('order-status').innerHTML = 
                     '<span class="badge bg-warning text-dark">' + data.status + '</span>';
-                showToast('info', 'Payment still pending. Please complete the payment on your phone.');
+                if (!pendingToastShown) {
+                    showToast('info', 'Payment still pending. Please complete the payment on your phone.');
+                    pendingToastShown = true;
+                }
             }
             hideLoading();
         })

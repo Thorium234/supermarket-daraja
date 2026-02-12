@@ -511,6 +511,29 @@ footer a:hover {
     border-color: var(--success-color);
 }
 
+.checkout-shell {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.95) 0%, rgba(233, 245, 240, 0.6) 100%);
+    border: 1px solid rgba(39, 174, 96, 0.12);
+    border-radius: 16px;
+    padding: 1.25rem;
+}
+
+.checkout-heading h2 {
+    font-weight: 800;
+    letter-spacing: 0.02em;
+}
+
+.checkout-card-elevated {
+    border: 1px solid rgba(44, 62, 80, 0.08);
+    box-shadow: 0 12px 26px rgba(32, 57, 84, 0.1);
+    border-radius: 14px;
+}
+
+.checkout-card-elevated .card-header {
+    border-top-left-radius: 14px;
+    border-top-right-radius: 14px;
+}
+
 /* Charts Container */
 .chart-container {
     position: relative;
@@ -625,3 +648,8 @@ footer a:hover {
     }
 }
 
+@media (max-width: 768px) {
+    .checkout-shell {
+        padding: 0.9rem;
+    }
+}
