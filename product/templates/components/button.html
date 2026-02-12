@@ -1,0 +1,4 @@
+{% comment %}Reusable button component{% endcomment %}
+<button type="{{ type|default:'button' }}" class="btn {{ class|default:'btn-primary' }} {{ extra_classes|default:'' }}" {% if disabled %}disabled{% endif %}>
+    {% if icon %}<i class="{{ icon }} me-1"></i>{% endif %}{{ label }}
+</button>

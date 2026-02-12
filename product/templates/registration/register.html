@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="card checkout-card-elevated">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0"><i class="fas fa-user-plus me-2"></i>Create Customer Account</h4>
+                </div>
+                <div class="card-body p-4">
+                    <form method="post" novalidate>
+                        {% csrf_token %}
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Username</label>
+                                {{ form.username }}
+                                {% if form.username.errors %}<small class="text-danger">{{ form.username.errors.0 }}</small>{% endif %}
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Phone Number</label>
+                                {{ form.phone_number }}
+                                {% if form.phone_number.errors %}<small class="text-danger">{{ form.phone_number.errors.0 }}</small>{% endif %}
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">First Name</label>
+                                {{ form.first_name }}
+                                {% if form.first_name.errors %}<small class="text-danger">{{ form.first_name.errors.0 }}</small>{% endif %}
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Last Name</label>
+                                {{ form.last_name }}
+                                {% if form.last_name.errors %}<small class="text-danger">{{ form.last_name.errors.0 }}</small>{% endif %}
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">Email</label>
+                                {{ form.email }}
+                                {% if form.email.errors %}<small class="text-danger">{{ form.email.errors.0 }}</small>{% endif %}
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Password</label>
+                                {{ form.password1 }}
+                                {% if form.password1.errors %}<small class="text-danger">{{ form.password1.errors.0 }}</small>{% endif %}
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Confirm Password</label>
+                                {{ form.password2 }}
+                                {% if form.password2.errors %}<small class="text-danger">{{ form.password2.errors.0 }}</small>{% endif %}
+                            </div>
+                            <div class="col-12">
+                                <div class="alert alert-light border mb-0">
+                                    <p class="mb-2 fw-semibold">Password requirements</p>
+                                    <ul class="small mb-0" id="password-rules">
+                                        {% for rule in password_rules %}
+                                        <li data-rule="django" class="text-muted">{{ rule }}</li>
+                                        {% endfor %}
+                                        <li id="rule-length" class="text-muted">At least 8 characters</li>
+                                        <li id="rule-number" class="text-muted">Cannot be entirely numeric</li>
+                                        <li id="rule-match" class="text-muted">Passwords must match</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-market-main w-100 mt-4">
+                            <i class="fas fa-user-check me-1"></i>Create Account
+                        </button>
+                        <p class="text-center text-muted mt-3 mb-0">
+                            Already have an account?
+                            <a href="{% url 'login' %}">Login here</a>
+                        </p>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(() => {
+    const p1 = document.getElementById("id_password1");
+    const p2 = document.getElementById("id_password2");
+    const lengthRule = document.getElementById("rule-length");
+    const numberRule = document.getElementById("rule-number");
+    const matchRule = document.getElementById("rule-match");
+
+    if (!p1 || !p2) return;
+
+    function setRule(el, ok) {
+        el.classList.toggle("text-success", ok);
+        el.classList.toggle("text-muted", !ok);
+    }
+
+    function validate() {
+        const v1 = p1.value || "";
+        const v2 = p2.value || "";
+        setRule(lengthRule, v1.length >= 8);
+        setRule(numberRule, !(v1.length > 0 && /^\d+$/.test(v1)));
+        setRule(matchRule, v2.length > 0 && v1 === v2);
+    }
+
+    p1.addEventListener("input", validate);
+    p2.addEventListener("input", validate);
+})();
+</script>
+{% endblock %}

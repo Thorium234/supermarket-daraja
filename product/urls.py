@@ -6,6 +6,8 @@ app_name = "product"
 urlpatterns = [
     # ---------------- Public / Shop ---------------- #
     path("", views.product_list, name="product_list"),
+    path("accounts/register/", views.register_customer, name="register_customer"),
+    path("customer/dashboard/", views.customer_dashboard, name="customer_dashboard"),
 
     # ---------------- Cart ---------------- #
     path("cart/", views.cart_view, name="cart"),

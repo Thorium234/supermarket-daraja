@@ -31,6 +31,15 @@
                     {% endfor %}
                 </select>
             </div>
+            <div class="col-md-4">
+                <label class="form-label">Store Category</label>
+                <select name="category" class="form-select">
+                    <option value="">Uncategorized</option>
+                    {% for category in categories %}
+                    <option value="{{ category.id }}" {% if product and product.category_id == category.id %}selected{% endif %}>{{ category.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
             <div class="col-12">
                 <label class="form-label">Description</label>
                 <textarea name="description" rows="3" class="form-control">{{ product.description|default:'' }}</textarea>

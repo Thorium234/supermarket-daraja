@@ -3,6 +3,7 @@ from django.db import models
 from django.utils import timezone
 import uuid
 from django.contrib.auth.models import User
+from django.core.validators import MinValueValidator, MaxValueValidator
 
 
 class Shelf(models.Model):
@@ -15,16 +16,44 @@ class Shelf(models.Model):
         return f"{self.name} ({self.location if self.location else 'No location'})"
 
 
+class Category(models.Model):
+    """Logical product categorization for storefront and filtering."""
+    name = models.CharField(max_length=120, unique=True, db_index=True)
+    slug = models.SlugField(max_length=140, unique=True, db_index=True)
+    description = models.TextField(blank=True, null=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("name",)
+        indexes = [
+            models.Index(fields=["slug"]),
+            models.Index(fields=["name"]),
+        ]
+
+    def __str__(self):
+        return self.name
+
+
 class Product(models.Model):
     """Represents an item in the supermarket."""
-    name = models.CharField(max_length=255)
+    name = models.CharField(max_length=255, db_index=True)
     description = models.TextField(blank=True, null=True)
     image = models.ImageField(upload_to="products/", blank=True, null=True)
+    category = models.ForeignKey("product.Category", on_delete=models.SET_NULL, null=True, blank=True, related_name="products")
     barcode = models.CharField(max_length=100, unique=True, blank=True, null=True)
-    price = models.DecimalField(max_digits=10, decimal_places=2)
-    stock = models.PositiveIntegerField(default=0)
+    price = models.DecimalField(max_digits=10, decimal_places=2, db_index=True)
+    stock = models.PositiveIntegerField(default=0, db_index=True)
     shelf = models.ForeignKey(Shelf, on_delete=models.SET_NULL, null=True, blank=True, related_name="products")
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["created_at"]),
+            models.Index(fields=["price"]),
+            models.Index(fields=["stock"]),
+            models.Index(fields=["category"]),
+        ]
 
     def __str__(self):
         return f"{self.name} ({self.stock} in stock)"
@@ -32,6 +61,7 @@ class Product(models.Model):
 
 class Customer(models.Model):
     """Represents a supermarket customer."""
+    user = models.OneToOneField(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="customer_profile")
     name = models.CharField(max_length=255, blank=True, null=True)
     phone_number = models.CharField(max_length=15)
     email = models.EmailField(blank=True, null=True)
@@ -56,8 +86,15 @@ class Order(models.Model):
     customer_name = models.CharField(max_length=255, default="Guest")
     total_price = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="PENDING")
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     stock_deducted = models.BooleanField(default=False)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["status", "created_at"]),
+            models.Index(fields=["created_at"]),
+        ]
+
     def __str__(self):
         return f"Order {self.id} - {self.customer_name} ({self.status})"
 
@@ -85,3 +122,25 @@ class VerificationLog(models.Model):
 
     def __str__(self):
         return f"Verification for Order {self.order.id} at {self.verified_at}"
+
+
+class ProductReview(models.Model):
+    """Customer product reviews and ratings."""
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="reviews")
+    customer = models.ForeignKey(Customer, on_delete=models.CASCADE, related_name="reviews")
+    rating = models.PositiveSmallIntegerField(validators=[MinValueValidator(1), MaxValueValidator(5)])
+    comment = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+        constraints = [
+            models.UniqueConstraint(fields=["product", "customer"], name="unique_product_review_per_customer"),
+        ]
+        indexes = [
+            models.Index(fields=["product", "created_at"]),
+            models.Index(fields=["rating"]),
+        ]
+
+    def __str__(self):
+        return f"{self.product.name} review ({self.rating}/5)"

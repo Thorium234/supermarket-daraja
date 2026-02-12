@@ -2,9 +2,9 @@
 import json
 from django.test import TestCase, Client
 from django.urls import reverse
-from django.utils import timezone
 
-from product.models import Order, OrderItem, Product, Payment
+from product.models import Order, OrderItem, Product
+from payment.models import Payment
 
 class STKCallbackTests(TestCase):
     def setUp(self):
@@ -43,7 +43,7 @@ class STKCallbackTests(TestCase):
         self.product.refresh_from_db()
         self.payment.refresh_from_db()
         self.assertEqual(self.order.status, "PAID")
-        self.assertEqual(self.payment.status, "SUCCESS")
+        self.assertEqual(self.payment.status, "PAID")
         self.assertEqual(self.product.stock, 8)  # 10 - 2
 
     def test_failed_payment_marks_order_cancelled(self):
@@ -62,4 +62,3 @@ class STKCallbackTests(TestCase):
         self._make_callback(result_code=0)
         self.product.refresh_from_db()
         self.assertEqual(self.product.stock, stock_after_first)  # no further deduction
-

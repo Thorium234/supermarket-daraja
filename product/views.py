@@ -8,6 +8,8 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.http import HttpResponse, FileResponse, JsonResponse
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
+from django.contrib.auth import login
+from django.contrib.auth.password_validation import password_validators_help_texts
 from django.db.models import Sum, Q
 from django.core.paginator import Paginator
 from django.utils.timezone import now
@@ -20,8 +22,10 @@ from reportlab.lib.utils import ImageReader
 from openpyxl import Workbook
 from openpyxl.chart import LineChart, Reference, BarChart
 
-from .models import Product, Order, OrderItem, Customer, VerificationLog, Shelf
+from .models import Product, Order, OrderItem, Customer, VerificationLog, Shelf, Category
 from payment.models import Payment, StockDeductionLog
+from .forms import CustomerRegistrationForm
+from .services.image_service import UnsplashImageService
 
 
 # ------------------------
@@ -37,6 +41,66 @@ def get_client_ip(request):
     if x_forwarded_for:
         return x_forwarded_for.split(",")[0]
     return request.META.get("REMOTE_ADDR")
+
+
+def register_customer(request):
+    """Public customer registration."""
+    if request.user.is_authenticated:
+        return redirect("product:product_list")
+
+    if request.method == "POST":
+        form = CustomerRegistrationForm(request.POST)
+        if form.is_valid():
+            user = form.save(commit=False)
+            user.first_name = form.cleaned_data["first_name"]
+            user.last_name = form.cleaned_data["last_name"]
+            user.email = form.cleaned_data["email"]
+            user.save()
+
+            customer, _ = Customer.objects.get_or_create(
+                phone_number=form.cleaned_data["phone_number"],
+                defaults={
+                    "user": user,
+                    "name": f"{form.cleaned_data['first_name']} {form.cleaned_data['last_name']}".strip(),
+                    "email": form.cleaned_data["email"],
+                },
+            )
+            if customer.user_id is None:
+                customer.user = user
+                customer.name = customer.name or f"{user.first_name} {user.last_name}".strip()
+                customer.email = customer.email or user.email
+                customer.save(update_fields=["user", "name", "email"])
+            login(request, user)
+            messages.success(request, "Account created successfully.")
+            return redirect("product:customer_dashboard")
+    else:
+        form = CustomerRegistrationForm()
+
+    return render(
+        request,
+        "registration/register.html",
+        {"form": form, "password_rules": password_validators_help_texts()},
+    )
+
+
+@login_required
+def customer_dashboard(request):
+    if request.user.is_staff or request.user.is_superuser:
+        return redirect("product:dashboard")
+
+    profile = Customer.objects.filter(user=request.user).first()
+    orders = Order.objects.none()
+    if profile:
+        orders = Order.objects.filter(customer=profile).order_by("-created_at")
+
+    context = {
+        "profile": profile,
+        "orders": orders[:15],
+        "total_orders": orders.count(),
+        "paid_orders": orders.filter(status="PAID").count(),
+        "pending_orders": orders.filter(status="PENDING").count(),
+    }
+    return render(request, "product/customer_dashboard.html", context)
 
 
 # ------------------------
@@ -65,10 +129,13 @@ def product_create(request):
     if request.method == "POST":
         shelf_id = request.POST.get("shelf")
         shelf = Shelf.objects.get(id=shelf_id) if shelf_id else None
+        category_id = request.POST.get("category")
+        category = Category.objects.get(id=category_id) if category_id else None
         Product.objects.create(
             name=request.POST.get("name"),
             description=request.POST.get("description"),
             image=request.FILES.get("image"),
+            category=category,
             price=request.POST.get("price"),
             stock=request.POST.get("stock"),
             barcode=request.POST.get("barcode"),
@@ -78,7 +145,8 @@ def product_create(request):
         return redirect("product:product_list_admin")
 
     shelves = Shelf.objects.all()
-    return render(request, "product/product_form.html", {"shelves": shelves})
+    categories = Category.objects.filter(is_active=True).order_by("name")
+    return render(request, "product/product_form.html", {"shelves": shelves, "categories": categories})
 
 
 @login_required
@@ -95,12 +163,15 @@ def product_edit(request, pk):
             product.image = request.FILES.get("image")
         shelf_id = request.POST.get("shelf")
         product.shelf = Shelf.objects.get(id=shelf_id) if shelf_id else None
+        category_id = request.POST.get("category")
+        product.category = Category.objects.get(id=category_id) if category_id else None
         product.save()
         messages.success(request, "Product updated successfully.")
         return redirect("product:product_list_admin")
 
     shelves = Shelf.objects.all()
-    return render(request, "product/product_form.html", {"product": product, "shelves": shelves})
+    categories = Category.objects.filter(is_active=True).order_by("name")
+    return render(request, "product/product_form.html", {"product": product, "shelves": shelves, "categories": categories})
 
 
 @login_required
@@ -131,7 +202,7 @@ def product_list(request):
         )
 
     if category:
-        products = products.filter(shelf_id=category)
+        products = products.filter(category_id=category)
     
     if stock_filter == "in_stock":
         products = products.filter(stock__gt=10)
@@ -155,9 +226,15 @@ def product_list(request):
             product.deal_tag = "Daily Deal"
         else:
             product.deal_tag = ""
+        if not product.image:
+            image_result = UnsplashImageService.get_image_for_product(
+                product_name=product.name,
+                category_name=(product.category.name if getattr(product, "category", None) else None),
+            )
+            product.dynamic_image_url = image_result.image_url
 
     categories = (
-        Shelf.objects.filter(products__isnull=False)
+        Category.objects.filter(products__isnull=False, is_active=True)
         .distinct()
         .order_by("name")
     )

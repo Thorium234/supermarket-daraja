@@ -92,59 +92,9 @@
 
     {% if products %}
     <div class="row row-cols-1 row-cols-sm-2 row-cols-lg-3 row-cols-xl-4 g-4" id="grid-start">
-                {% for product in products %}
+        {% for product in products %}
         <div class="col">
-            <article class="product-card market-product-card h-100">
-                <div class="product-image">
-                    {% if product.image %}
-                    <img src="{{ product.image.url }}" alt="{{ product.name }}" class="product-image-tag">
-                    {% else %}
-                    <div class="product-image-fallback">
-                        <i class="fas fa-box-open"></i>
-                    </div>
-                    {% endif %}
-                    {% if product.deal_tag %}
-                    <span class="deal-pill">{{ product.deal_tag }}</span>
-                    {% endif %}
-                </div>
-                <div class="card-body d-flex flex-column">
-                    <div class="d-flex justify-content-between align-items-start mb-1">
-                        <h6 class="card-title mb-0">{{ product.name }}</h6>
-                        <span class="category-pill">{{ product.shelf.name|default:"General" }}</span>
-                    </div>
-                    <div class="rating-row mb-2">
-                        <i class="fas fa-star"></i>
-                        <span>{{ product.display_rating }}</span>
-                        <small class="text-muted">({{ product.review_count }})</small>
-                    </div>
-                    <p class="text-muted small mb-2">
-                        <i class="fas fa-barcode me-1"></i>{{ product.barcode|default:"N/A" }}
-                    </p>
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <span class="product-price">KES {{ product.price|floatformat:2 }}</span>
-                        {% if product.stock > 10 %}
-                            <span class="badge badge-in-stock">In stock</span>
-                        {% elif product.stock > 0 %}
-                            <span class="badge badge-low-stock">Only {{ product.stock }}</span>
-                        {% else %}
-                            <span class="badge badge-out-of-stock">Sold out</span>
-                        {% endif %}
-                    </div>
-                    <div class="mt-auto">
-                        {% if product.stock > 0 %}
-                        <button type="button"
-                                class="btn btn-market-main w-100"
-                                onclick="quickAddToCart({{ product.id }}, '{{ product.name|escapejs }}')">
-                            <i class="fas fa-cart-plus me-1"></i>Add to Cart
-                        </button>
-                        {% else %}
-                        <button class="btn btn-secondary w-100" disabled>
-                            <i class="fas fa-ban me-1"></i>Unavailable
-                        </button>
-                        {% endif %}
-                    </div>
-                </div>
-            </article>
+            {% include "product/components/product_card.html" with product=product %}
         </div>
         {% endfor %}
     </div>

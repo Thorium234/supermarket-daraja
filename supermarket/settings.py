@@ -12,12 +12,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-6735otn9px40kr@fp7p+8m9*62ws5r5&$twv_f9++w1mxq!87c'
+SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", 'django-insecure-6735otn9px40kr@fp7p+8m9*62ws5r5&$twv_f9++w1mxq!87c')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.environ.get("DJANGO_DEBUG", "True").lower() == "true"
 
-ALLOWED_HOSTS = ['6d74e7172178.ngrok-free.app','*']
+ALLOWED_HOSTS = [host.strip() for host in os.environ.get("DJANGO_ALLOWED_HOSTS", "127.0.0.1,localhost,6d74e7172178.ngrok-free.app,*").split(",") if host.strip()]
 
 
 # Application definition
@@ -44,6 +44,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'supermarket.core.middleware.ApiExceptionMiddleware',
 ]
 
 ROOT_URLCONF = 'supermarket.urls'
@@ -116,6 +117,16 @@ STATIC_URL = 'static/'
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "supermarket-cache",
+    }
+}
+
+UNSPLASH_ACCESS_KEY = os.environ.get("UNSPLASH_ACCESS_KEY", "")
+UNSPLASH_APP_NAME = "my_daraja_marketplace"
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
@@ -129,15 +140,15 @@ CSRF_TRUSTED_ORIGINS = [
 # BASE_URL = "http://localhost:8000"
 
 USE_NGROK = os.environ.get("USE_NGROK", "False") == "True" and os.environ.get("RUN_MAIN", None) != "true"
-BASE_URL = "https://7ef5e0c81338.ngrok-free.app"
+BASE_URL = os.environ.get("BASE_URL", "https://7ef5e0c81338.ngrok-free.app")
 # The Mpesa environment to use
 # Possible values: sandbox, production
 
 MPESA_ENVIRONMENT = 'sandbox'
 
 # Credentials for the daraja app
-MPESA_CONSUMER_KEY = 'bYsdIPpnbnQNoWAvpQfL4SalXbDRBxsU72VURxAOAACqmG0Y'
-MPESA_CONSUMER_SECRET = 'IFeRjqUB2Bk4eCSpHZAFxbyvvOAs31eSMC26vjZOpADFWtkfgs1NgpIOABVHnB4e'
+MPESA_CONSUMER_KEY = os.environ.get("MPESA_CONSUMER_KEY", 'bYsdIPpnbnQNoWAvpQfL4SalXbDRBxsU72VURxAOAACqmG0Y')
+MPESA_CONSUMER_SECRET = os.environ.get("MPESA_CONSUMER_SECRET", 'IFeRjqUB2Bk4eCSpHZAFxbyvvOAs31eSMC26vjZOpADFWtkfgs1NgpIOABVHnB4e')
 
 
 
@@ -163,7 +174,7 @@ MPESA_SHORTCODE_TYPE = 'paybill'
 # Sandbox passkey is available on test credentials page
 # Production passkey is sent via email once you go live
 
-MPESA_PASSKEY = 'bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919'
+MPESA_PASSKEY = os.environ.get("MPESA_PASSKEY", 'bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919')
 
 # Username for initiator (to be used in B2C, B2B, AccountBalance and TransactionStatusQuery Transactions)
 
@@ -179,14 +190,14 @@ EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
 EMAIL_HOST = "smtp.gmail.com"
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
-EMAIL_HOST_USER = "your-email@gmail.com"
-EMAIL_HOST_PASSWORD = "your-app-password"
+EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "your-email@gmail.com")
+EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "your-app-password")
 DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
 
 
 # settings.py
-AFRICASTALKING_USERNAME = "sandbox"   # e.g. "sandbox" or your AT username
-AFRICASTALKING_API_KEY = "atsk_eb02bae5dfa0958ffae37af2dead73c2b603a04b4e74442d757c8448ef788f1db1869753"
+AFRICASTALKING_USERNAME = os.environ.get("AFRICASTALKING_USERNAME", "sandbox")   # e.g. "sandbox" or your AT username
+AFRICASTALKING_API_KEY = os.environ.get("AFRICASTALKING_API_KEY", "atsk_eb02bae5dfa0958ffae37af2dead73c2b603a04b4e74442d757c8448ef788f1db1869753")
 
 
 # Celery / Redis
@@ -196,3 +207,7 @@ CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = "Africa/Nairobi"
+
+SESSION_COOKIE_HTTPONLY = True
+CSRF_COOKIE_HTTPONLY = True
+X_FRAME_OPTIONS = "DENY"

@@ -1,7 +1,7 @@
 # product/admin.py
 from django.contrib import admin
 from django.utils.html import format_html
-from .models import Shelf, Product, Customer, Order, OrderItem, VerificationLog
+from .models import Shelf, Category, Product, Customer, Order, OrderItem, VerificationLog, ProductReview
 
 
 @admin.register(Shelf)
@@ -11,12 +11,20 @@ class ShelfAdmin(admin.ModelAdmin):
     ordering = ("name",)
 
 
+@admin.register(Category)
+class CategoryAdmin(admin.ModelAdmin):
+    list_display = ("name", "slug", "is_active", "created_at")
+    search_fields = ("name", "slug")
+    list_filter = ("is_active", "created_at")
+    prepopulated_fields = {"slug": ("name",)}
+
+
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
-    list_display = ("image_preview", "name", "price", "stock", "shelf", "barcode", "created_at")
-    search_fields = ("name", "barcode", "shelf__name")
-    list_filter = ("created_at", "shelf")
-    autocomplete_fields = ("shelf",)
+    list_display = ("image_preview", "name", "category", "price", "stock", "shelf", "barcode", "created_at")
+    search_fields = ("name", "barcode", "shelf__name", "category__name")
+    list_filter = ("created_at", "shelf", "category")
+    autocomplete_fields = ("shelf", "category")
 
     def image_preview(self, obj):
         if obj.image:
@@ -42,7 +50,7 @@ class CustomerAdmin(admin.ModelAdmin):
 class OrderAdmin(admin.ModelAdmin): 
     list_display = ("id", "customer", "total_price", "status", "created_at", "stock_deducted")
     list_filter = ("status", "created_at")
-    search_fields = ("customer__phone_number", "receipt_number")
+    search_fields = ("customer__phone_number", "customer_name", "id")
     inlines = [OrderItemInline]
 
 
@@ -51,6 +59,13 @@ class VerificationLogAdmin(admin.ModelAdmin):
     list_display = ("order", "verified_at", "ip_address", "verified_by")
     list_filter = ("verified_at", "verified_by")
     search_fields = ("order__id", "ip_address", "user_agent")
+
+
+@admin.register(ProductReview)
+class ProductReviewAdmin(admin.ModelAdmin):
+    list_display = ("product", "customer", "rating", "created_at")
+    list_filter = ("rating", "created_at")
+    search_fields = ("product__name", "customer__phone_number", "comment")
 
 
 from django.contrib import admin

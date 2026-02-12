@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600" viewBox="0 0 600 600" role="img" aria-label="Product placeholder">
+  <defs>
+    <linearGradient id="g" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0%" stop-color="#f68b1e"/>
+      <stop offset="100%" stop-color="#2c3e50"/>
+    </linearGradient>
+  </defs>
+  <rect width="600" height="600" fill="url(#g)"/>
+  <g fill="#fff" opacity="0.92">
+    <rect x="160" y="180" width="280" height="240" rx="24"/>
+    <rect x="210" y="240" width="180" height="120" rx="10" fill="#f68b1e"/>
+    <circle cx="250" cy="300" r="18"/>
+    <circle cx="350" cy="300" r="18"/>
+  </g>
+  <text x="300" y="480" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="28" fill="#ffffff">No Image Yet</text>
+</svg>
