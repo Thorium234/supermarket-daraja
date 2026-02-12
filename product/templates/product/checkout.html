@@ -222,6 +222,7 @@
 </div>
 
 <script>
+{% if order %}
 function checkPaymentStatus() {
     showLoading('Checking payment status...');
     
@@ -252,6 +253,7 @@ function checkPaymentStatus() {
 // Auto-refresh every 10 seconds if order is pending
 {% if order and order.status == "PENDING" %}
 setInterval(checkPaymentStatus, 10000);
+{% endif %}
 {% endif %}
 
 {% if not order %}
