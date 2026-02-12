@@ -8,6 +8,7 @@ from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
+from django.urls import reverse
 
 from django_daraja.mpesa.core import MpesaClient
 
@@ -105,7 +106,38 @@ def initiate_payment(request, order_id):
     return render(
         request,
         "payment/payment_processing.html",
-        {"order": order, "payment": payment, "daraja_response": response},
+        {
+            "order": order,
+            "payment": payment,
+            "daraja_response": response,
+            "phone_number": phone_number,
+        },
+    )
+
+
+from django.views.decorators.http import require_GET
+
+
+@require_GET
+def payment_status(request, order_id):
+    """Return latest payment + order status for polling on processing page."""
+    order = get_object_or_404(Order, id=order_id)
+    payment = Payment.objects.filter(order=order).order_by("-id").first()
+
+    payment_status_value = payment.status if payment else "NOT_FOUND"
+    order_status_value = order.status
+    is_paid = payment_status_value == Payment.STATUS_PAID or order_status_value == "PAID"
+    is_failed = payment_status_value == Payment.STATUS_FAILED or order_status_value in ("FAILED", "CANCELLED")
+
+    return JsonResponse(
+        {
+            "order_id": order.id,
+            "payment_status": payment_status_value,
+            "order_status": order_status_value,
+            "is_paid": is_paid,
+            "is_failed": is_failed,
+            "receipt_url": reverse("product:receipt", args=[order.id]),
+        }
     )
 
 # ---------------- Safaricom Callback ---------------- #

@@ -6,6 +6,7 @@ app_name = "payment"
 urlpatterns = [
     # ---------------- Payment initiation + callbacks ---------------- #
     path("initiate-payment/<int:order_id>/", views.initiate_payment, name="initiate_payment"),
+    path("status/<int:order_id>/", views.payment_status, name="payment_status"),
     path("stk_push_callback/", views.stk_push_callback, name="stk_push_callback"),
 
     # ---------------- Payment status feedback ---------------- #

@@ -1,6 +1,119 @@
 {% extends "base.html" %}
 {% block content %}
-<h2>Processing Payment for Order #{{ order.id }}</h2>
-<p>Please complete the payment on your phone (MPesa prompt sent).</p>
-{% endblock %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-lg-7">
+            <div class="card shadow-sm">
+                <div class="card-body p-4">
+                    <h3 class="mb-2">Processing Payment for Order #{{ order.id }}</h3>
+                    <p class="text-muted mb-3">
+                        We sent an STK Push to <strong>{{ phone_number }}</strong>.
+                        Enter your M-Pesa PIN on your phone to complete payment.
+                    </p>
 
+                    <div id="pending-box">
+                        <div class="alert alert-info mb-3">
+                            Waiting for payment confirmation...
+                        </div>
+                        <p class="mb-1">
+                            Time left before retry: <strong id="countdown">10</strong>s
+                        </p>
+                        <div class="progress mb-3" role="progressbar" aria-label="payment-timer">
+                            <div id="timer-bar" class="progress-bar progress-bar-striped progress-bar-animated bg-info" style="width: 100%"></div>
+                        </div>
+                    </div>
+
+                    <div id="success-box" class="alert alert-success d-none mb-3">
+                        Payment confirmed. Redirecting to your receipt...
+                    </div>
+
+                    <div id="failed-box" class="alert alert-danger d-none mb-3"></div>
+
+                    <div id="actions" class="d-none d-flex gap-2">
+                        <form method="post" action="{% url 'payment:initiate_payment' order.id %}">
+                            {% csrf_token %}
+                            <input type="hidden" name="phone_number" value="{{ phone_number }}">
+                            <button type="submit" class="btn btn-warning">
+                                Retry Payment
+                            </button>
+                        </form>
+                        <a href="{% url 'product:checkout' %}" class="btn btn-outline-secondary">
+                            Back to Checkout
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(() => {
+    const countdownEl = document.getElementById("countdown");
+    const timerBar = document.getElementById("timer-bar");
+    const pendingBox = document.getElementById("pending-box");
+    const successBox = document.getElementById("success-box");
+    const failedBox = document.getElementById("failed-box");
+    const actions = document.getElementById("actions");
+
+    const totalSeconds = 10;
+    let remaining = totalSeconds;
+    let finalized = false;
+
+    const statusUrl = "/payment/status/{{ order.id }}/";
+
+    function finalizeAsFailed(message) {
+        if (finalized) return;
+        finalized = true;
+        clearInterval(tickTimer);
+        clearInterval(pollTimer);
+        pendingBox.classList.add("d-none");
+        failedBox.textContent = message;
+        failedBox.classList.remove("d-none");
+        actions.classList.remove("d-none");
+    }
+
+    function finalizeAsPaid(receiptUrl) {
+        if (finalized) return;
+        finalized = true;
+        clearInterval(tickTimer);
+        clearInterval(pollTimer);
+        pendingBox.classList.add("d-none");
+        successBox.classList.remove("d-none");
+        setTimeout(() => {
+            window.location.href = receiptUrl;
+        }, 1200);
+    }
+
+    function pollStatus() {
+        fetch(statusUrl, {headers: {"X-Requested-With": "XMLHttpRequest"}})
+            .then((res) => res.json())
+            .then((data) => {
+                if (data.is_paid) {
+                    finalizeAsPaid(data.receipt_url);
+                    return;
+                }
+                if (data.is_failed) {
+                    finalizeAsFailed("Payment was cancelled or failed. Please retry.");
+                }
+            })
+            .catch(() => {
+                // Keep timer running; user can retry on timeout.
+            });
+    }
+
+    const tickTimer = setInterval(() => {
+        if (finalized) return;
+        remaining -= 1;
+        countdownEl.textContent = remaining;
+        timerBar.style.width = `${(remaining / totalSeconds) * 100}%`;
+        if (remaining <= 0) {
+            finalizeAsFailed("Payment timed out (no PIN confirmation detected in time). Please retry.");
+        }
+    }, 1000);
+
+    const pollTimer = setInterval(pollStatus, 2000);
+    pollStatus();
+})();
+</script>
+{% endblock %}
