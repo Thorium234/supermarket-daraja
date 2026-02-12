@@ -180,15 +180,15 @@
                             <td>{{ order.items.count }} items</td>
                             <td>KES {{ order.total_price|floatformat:2 }}</td>
                             <td>
-                                {% if order.status == "PAID" %}
+                                {% if order.status|upper == "PAID" %}
                                     <span class="badge bg-success">Paid</span>
-                                {% elif order.status == "PENDING" %}
+                                {% elif order.status|upper == "PENDING" %}
                                     <span class="badge bg-warning text-dark">Pending</span>
-                                {% elif order.status == "CANCELLED" %}
+                                {% elif order.status|upper == "CANCELLED" %}
                                     <span class="badge bg-danger">Cancelled</span>
-                                {% elif order.status == "FAILED" %}
+                                {% elif order.status|upper == "FAILED" %}
                                     <span class="badge bg-secondary">Failed</span>
-                                {% elif order.status == "REFUNDED" %}
+                                {% elif order.status|upper == "REFUNDED" %}
                                     <span class="badge bg-info">Refunded</span>
                                 {% else %}
                                     <span class="badge bg-secondary">{{ order.status }}</span>
@@ -210,11 +210,11 @@
                                             </a>
                                         </li>
                                         <li>
-                                            <a class="dropdown-item" href="{% url 'receipt_pdf' order.id %}">
+                                            <a class="dropdown-item" href="{% url 'product:receipt_pdf' order.id %}">
                                                 <i class="fas fa-file-pdf me-1"></i>Download PDF
                                             </a>
                                         </li>
-                                        {% if order.status == "PENDING" %}
+                                        {% if order.status|upper == "PENDING" %}
                                         <li><hr class="dropdown-divider"></li>
                                         <li>
                                             <a class="dropdown-item text-danger" href="#">
@@ -450,4 +450,3 @@
     });
 </script>
 {% endblock %}
-

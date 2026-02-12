@@ -1,4 +1,5 @@
 from decimal import Decimal
+from urllib.parse import quote
 import io, os, json, qrcode
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -165,58 +166,75 @@ def add_to_cart(request, pk):
 
     request.session["cart"] = cart
     request.session.modified = True
-    
-    # Return JSON response for AJAX
-    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-            "subtotal": subtotal,
-        })
+
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        quantity = cart[pk_str]["quantity"]
+        return JsonResponse(
+            {
+                "success": True,
+                "message": f"{product.name} added to cart",
+                "product_name": product.name,
+                "cart_count": sum(
+                    item.get("quantity", 1) if isinstance(item, dict) else int(item)
+                    for item in cart.values()
+                ),
+                "item_quantity": quantity,
+            }
+        )
+
+    messages.success(request, f"{product.name} added to cart.")
+    return redirect("product:product_list")
+
+
+def checkout(request):
+    """Create an order from session cart and trigger payment redirect."""
+    cart = request.session.get("cart", {})
+    if not cart:
+        messages.warning(request, "Your cart is empty.")
+        return redirect("product:cart")
+
+    items, total = [], Decimal("0.00")
+    for product_id, item_data in cart.items():
+        product = get_object_or_404(Product, id=product_id)
+        quantity = item_data.get("quantity") if isinstance(item_data, dict) else int(item_data)
+        subtotal = product.price * quantity
+        items.append({"product": product, "quantity": quantity, "subtotal": subtotal})
         total += subtotal
 
     order = None
     if request.method == "POST":
-        phone_number = request.POST.get("phone_number")
+        raw_phone = (request.POST.get("phone_number") or "").strip()
+        phone_digits = "".join(ch for ch in raw_phone if ch.isdigit())
+        if phone_digits.startswith("0"):
+            phone_digits = "254" + phone_digits[1:]
+        elif phone_digits.startswith("7") and len(phone_digits) == 9:
+            phone_digits = "254" + phone_digits
+
+        if not phone_digits.startswith("254") or len(phone_digits) != 12:
+            messages.error(request, "Enter a valid Safaricom number (e.g. 07XXXXXXXX).")
+            return render(request, "product/checkout.html", {"items": items, "total": total, "order": order})
+
         action = request.POST.get("action")
+        customer, _ = Customer.objects.get_or_create(phone_number=phone_digits)
+        order = Order.objects.create(customer=customer, status="PENDING", total_price=total)
 
-        # Create or get customer
-        customer, _ = Customer.objects.get_or_create(phone_number=phone_number)
-
-        # Create order
-        order = Order.objects.create(
-            customer=customer,
-            status="PENDING",
-            total_price=total
-        )
-
-        # Save order items
         for product_id, qty in cart.items():
             product = get_object_or_404(Product, id=product_id)
-            quantity = qty["quantity"] if isinstance(qty, dict) else qty
-            OrderItem.objects.create(
-                order=order,
-                product=product,
-                quantity=quantity,
-                price=product.price
-            )
+            quantity = qty["quantity"] if isinstance(qty, dict) else int(qty)
+            OrderItem.objects.create(order=order, product=product, quantity=quantity, price=product.price)
 
-        # Clear cart after order creation
         request.session["cart"] = {}
         request.session.modified = True
 
         if action == "pay_now":
-            # Instead of redirect, POST directly to initiate_payment
             return render(
                 request,
-                "payment/payment_redirect.html",  # small form that auto-submits
-                {"order": order, "phone_number": phone_number}
+                "payment/payment_redirect.html",
+                {"order": order, "phone_number": phone_digits},
             )
-
         return redirect("product:receipt", order_id=order.id)
 
-    return render(
-        request,
-        "product/checkout.html",
-        {"items": items, "total": total, "order": order}
-    )
+    return render(request, "product/checkout.html", {"items": items, "total": total, "order": order})
 
 
 
@@ -332,6 +350,27 @@ def receipt(request, order_id):
 
     # ✅ Get latest payment if exists
     payment = Payment.objects.filter(order=order).last()
+    verify_path = request.build_absolute_uri(f"/order/{order.id}/verify/")
+
+    whatsapp_url = None
+    if order.customer and order.customer.phone_number and payment and payment.mpesa_receipt_no:
+        phone_digits = "".join(ch for ch in order.customer.phone_number if ch.isdigit())
+        if phone_digits.startswith("254"):
+            wa_phone = phone_digits
+        elif phone_digits.startswith("0"):
+            wa_phone = f"254{phone_digits[1:]}"
+        elif phone_digits.startswith("7") and len(phone_digits) == 9:
+            wa_phone = f"254{phone_digits}"
+        else:
+            wa_phone = phone_digits
+
+        wa_text = (
+            f"Order #{order.id} has been PAID. "
+            f"M-Pesa receipt: {payment.mpesa_receipt_no}. "
+            f"Total: KES {order.total_price:.2f}. "
+            f"Verify: {verify_path}"
+        )
+        whatsapp_url = f"https://wa.me/{wa_phone}?text={quote(wa_text)}"
 
     return render(request, "product/receipt.html", {
         "order": order,
@@ -339,6 +378,8 @@ def receipt(request, order_id):
         "transaction_date": transaction_date,
         "phone_number": phone_number,
         "payment": payment,   # ✅ pass payment
+        "verify_path": verify_path,
+        "whatsapp_url": whatsapp_url,
     })
 
 
@@ -530,7 +571,30 @@ def clear_cart(request):
 # -----------------------
 def receipt_view(request, order_id):
     """Display receipt for an order."""
+    return redirect("product:receipt", order_id=order_id)
+
+
+def send_receipt_sms(request, order_id):
+    """Send a receipt verification link to the order customer's phone."""
     order = get_object_or_404(Order, id=order_id)
-    return render(request, "product/receipt.html", {"order": order})
 
+    if not order.customer or not order.customer.phone_number:
+        messages.error(request, "No customer phone number is available for this order.")
+        return redirect("product:receipt", order_id=order.id)
 
+    from payment.sms import send_sms
+
+    receipt_link = request.build_absolute_uri(f"/receipt/{order.id}/")
+    message = (
+        f"Your receipt for Order #{order.id}. "
+        f"Status: {order.status}. "
+        f"View receipt: {receipt_link}"
+    )
+    success, details = send_sms(order.customer.phone_number, message)
+
+    if success:
+        messages.success(request, "Receipt SMS sent successfully.")
+    else:
+        messages.error(request, f"Failed to send receipt SMS: {details}")
+
+    return redirect("product:receipt", order_id=order.id)

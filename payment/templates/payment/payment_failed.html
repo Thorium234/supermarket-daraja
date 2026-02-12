@@ -2,6 +2,5 @@
 {% block content %}
 <h2>❌ Payment Failed or Cancelled</h2>
 <p>Order #{{ order.id }} was not completed.</p>
-<a href="{% url 'checkout' %}">Try Again</a>
+<a href="{% url 'product:checkout' %}">Try Again</a>
 {% endblock %}
-

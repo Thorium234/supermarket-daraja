@@ -26,7 +26,6 @@ urlpatterns = [
     path("receipt/<int:order_id>/pdf/", views.receipt_pdf, name="receipt_pdf"),
     path("receipt-view/<int:order_id>/", views.receipt_view, name="receipt_view"),
     path("receipt/<int:order_id>/send-sms/", views.send_receipt_sms, name="send_receipt_sms"),
-    path("receipt/<int:order_id>/verify/", views.verify_order, name="receipt_verify"),
 
     # ---------------- Admin / Cashier ---------------- #
     path("dashboard/", views.dashboard, name="dashboard"),
@@ -41,4 +40,3 @@ urlpatterns = [
     path("dashboard/export/excel/", views.export_excel, name="export_excel"),
     path("dashboard/sales-graph/", views.sales_graph, name="sales_graph"),
 ]
-

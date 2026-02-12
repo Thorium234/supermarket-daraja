@@ -177,7 +177,8 @@
                         
                         <!-- QR Code for verification -->
                         <div class="my-3">
-                            {% qr_from_text request.build_absolute_uri|slice:":-10"|add:order.id|add:"/order/verify/"|add:order.id|stringformat:"s" size="L" image_format="png" %}
+                            {% url 'product:verify_order' order.id as verify_url %}
+                            {% qr_from_text request.scheme|add:"://"|add:request.get_host|add:verify_url size="L" image_format="png" %}
                             <p class="small text-muted mt-2">
                                 <i class="fas fa-qrcode me-1"></i>Scan to verify order
                             </p>
@@ -195,7 +196,7 @@
                         {% endif %}
                         
                         <div class="mt-3">
-                            <a href="{% url 'receipt_pdf' order.id %}" class="btn btn-danger">
+                            <a href="{% url 'product:receipt_pdf' order.id %}" class="btn btn-danger">
                                 <i class="fas fa-file-pdf me-1"></i>Download Receipt
                             </a>
                         </div>
@@ -224,7 +225,7 @@
 function checkPaymentStatus() {
     showLoading('Checking payment status...');
     
-    fetch("{% url 'check_payment_status' order.id %}")
+    fetch("{% url 'product:check_payment_status' order.id %}")
         .then(response => response.json())
         .then(data => {
             if (data.status === "PAID") {
@@ -232,7 +233,7 @@ function checkPaymentStatus() {
                     '<span class="badge bg-success">Paid</span>';
                 showToast('success', 'Payment successful! Redirecting...');
                 setTimeout(() => {
-                    window.location.href = "{% url 'receipt' order.id %}";
+                    window.location.href = "{% url 'product:receipt' order.id %}";
                 }, 2000);
             } else {
                 document.getElementById('order-status').innerHTML = 
@@ -267,4 +268,3 @@ document.getElementById('paymentForm').addEventListener('submit', function(e) {
 {% endif %}
 </script>
 {% endblock %}
-
