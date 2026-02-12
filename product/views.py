@@ -189,6 +189,24 @@ def add_to_cart(request, pk):
 def checkout(request):
     """Create an order from session cart and trigger payment redirect."""
     cart = request.session.get("cart", {})
+    existing_order_id = request.GET.get("order_id")
+
+    if not cart and existing_order_id:
+        order = get_object_or_404(Order, id=existing_order_id)
+        items = [
+            {
+                "product": item.product,
+                "quantity": item.quantity,
+                "subtotal": item.subtotal(),
+            }
+            for item in order.items.select_related("product").all()
+        ]
+        return render(
+            request,
+            "product/checkout.html",
+            {"items": items, "total": order.total_price, "order": order},
+        )
+
     if not cart:
         messages.warning(request, "Your cart is empty.")
         return redirect("product:cart")

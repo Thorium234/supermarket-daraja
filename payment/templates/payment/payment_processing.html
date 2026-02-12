@@ -37,7 +37,7 @@
                                 Retry Payment
                             </button>
                         </form>
-                        <a href="{% url 'product:checkout' %}" class="btn btn-outline-secondary">
+                        <a href="{% url 'product:checkout' %}?order_id={{ order.id }}" class="btn btn-outline-secondary">
                             Back to Checkout
                         </a>
                     </div>
